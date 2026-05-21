@@ -22,7 +22,6 @@
 			"@/*": ["./src/*"],
 			"@server/*": ["./server/*"],
 			"@shared/*": ["./shared/*"]
-		},
-		"baseUrl": "."
+		}
 	}
 }

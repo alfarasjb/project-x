@@ -45,6 +45,19 @@ The PRD is the source of truth. Fetch before scope/architecture decisions:
 
 Env var: `DATABASE_URL` (postgres) — **required**. Graph state and the relational tables both live there. Health endpoint and MCP stub still boot without it, but the moment you query graphs the lazy connection will throw.
 
+## First-time setup
+
+```sh
+pnpm install
+cp .env.example .env          # credentials already match docker-compose.yml
+docker compose up -d          # local Postgres 18 on :5432
+pnpm db:generate              # generate the first migration from schema
+pnpm db:migrate               # apply it
+pnpm dev                      # boot Vite + Fastify
+```
+
+`docker-compose.yml` runs Postgres only. `docker compose down -v` wipes the data volume.
+
 ## Key file locations
 
 ```

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, Link } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 
 export const Route = createFileRoute("/")({
@@ -39,6 +39,13 @@ function HomePage() {
 					<p className="text-muted-foreground mt-2 text-xs">loading…</p>
 				)}
 			</section>
+
+			<Link
+				to="/graph"
+				className="text-primary text-sm font-medium underline-offset-4 hover:underline"
+			>
+				View the graph →
+			</Link>
 		</main>
 	)
 }

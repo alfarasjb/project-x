@@ -1,0 +1,68 @@
+import { Handle, Position, type Node, type NodeProps } from "@xyflow/react"
+import type { Description, Signature } from "@shared/schemas/graph"
+import { cn } from "@/lib/utils"
+import { DEFAULT_DOT, KIND_DOT } from "./node-style"
+
+export interface SymbolNodeData {
+	label: string
+	kind: string
+	path: string
+	signature?: Signature
+	description?: Description
+	[key: string]: unknown
+}
+
+export type SymbolNodeType = Node<SymbolNodeData, "symbol">
+
+/** Format a signature compactly: `(name: Type, …) → ReturnType`. */
+function formatSignature(sig: Signature): string {
+	const params = sig.parameters
+		.map((p) => (p.type ? `${p.name}: ${p.type.name}` : p.name))
+		.join(", ")
+	const ret = sig.returnType ? ` → ${sig.returnType.name}` : ""
+	return `(${params})${ret}`
+}
+
+/** A leaf node — a function, class, constant, type, or other symbol. */
+export function SymbolNode({ data, selected }: NodeProps<SymbolNodeType>) {
+	const tooltip = data.description
+		? data.description.why
+			? `${data.description.what}\n\nWhy: ${data.description.why}`
+			: data.description.what
+		: data.path
+
+	return (
+		<div
+			className={cn(
+				"flex w-[230px] flex-col gap-0.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm",
+				selected && "ring-2 ring-ring"
+			)}
+			title={tooltip}
+		>
+			<Handle type="target" position={Position.Top} />
+			<div className="flex items-center gap-2">
+				<span
+					className={cn(
+						"size-1.5 shrink-0 rounded-full",
+						KIND_DOT[data.kind] ?? DEFAULT_DOT
+					)}
+				/>
+				<span className="text-xs font-medium">{data.label}</span>
+				<span className="ml-auto font-mono text-[10px] text-muted-foreground">
+					{data.kind}
+				</span>
+			</div>
+			{data.signature && (
+				<div className="font-mono text-[10px] leading-snug text-muted-foreground">
+					{formatSignature(data.signature)}
+				</div>
+			)}
+			{!data.signature && data.description && (
+				<div className="text-[10px] leading-snug text-muted-foreground">
+					{data.description.what}
+				</div>
+			)}
+			<Handle type="source" position={Position.Bottom} />
+		</div>
+	)
+}

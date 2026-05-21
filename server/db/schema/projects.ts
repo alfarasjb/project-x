@@ -24,11 +24,11 @@ export const projects = schema.table(
 		intentGraph: jsonb("intent_graph")
 			.$type<Graph>()
 			.notNull()
-			.default(sql`'{"modules":[],"edges":[],"constraints":[]}'::jsonb`),
+			.default(sql`'{"nodes":[],"edges":[]}'::jsonb`),
 		actualGraph: jsonb("actual_graph")
 			.$type<Graph>()
 			.notNull()
-			.default(sql`'{"modules":[],"edges":[],"constraints":[]}'::jsonb`),
+			.default(sql`'{"nodes":[],"edges":[]}'::jsonb`),
 		lastParsedAt: timestamps.updatedAt,
 		createdAt: timestamps.createdAt,
 		updatedAt: timestamps.updatedAt,
