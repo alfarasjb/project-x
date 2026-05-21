@@ -49,7 +49,7 @@ function toFlowNodes(graph: Graph): Node[] {
 		return {
 			id: node.id,
 			type: nodeType(node.kind),
-			position: node.position,
+			position: node.position ?? { x: 0, y: 0 },
 			parentId: node.parentId ?? undefined,
 			extent: node.parentId ? "parent" : undefined,
 			...(node.size ? { style: { width: node.size.width, height: node.size.height } } : {}),

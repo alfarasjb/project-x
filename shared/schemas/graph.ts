@@ -121,8 +121,12 @@ export const GraphNodeSchema = z.object({
 	signature: SignatureSchema.optional(),
 	/** Docstring / summary. AI-inferred or authored. */
 	description: DescriptionSchema.optional(),
-	/** Canvas position. Explicit — no auto-layout yet. Relative to parent if nested. */
-	position: PositionSchema,
+	/**
+	 * Canvas position, relative to parent if nested. Set by the user (intent
+	 * graph) or by a layout pass (parsed graphs). Optional — the parser emits
+	 * topology only; layout assigns positions before render.
+	 */
+	position: PositionSchema.optional(),
 	/** Explicit box size. Containers set this; leaf nodes auto-size. */
 	size: SizeSchema.optional()
 })

@@ -1,5 +1,6 @@
 import Fastify from "fastify"
 import cors from "@fastify/cors"
+import { graphRoutes } from "./routes/graph.js"
 
 const PORT = Number(process.env.PORT ?? 3000)
 
@@ -12,6 +13,8 @@ app.get("/api/health", () => ({
 	mcp: { status: "stub" as const, transport: "stdio" as const },
 	uptime: Math.round(process.uptime())
 }))
+
+await app.register(graphRoutes)
 
 try {
 	await app.listen({ port: PORT, host: "0.0.0.0" })

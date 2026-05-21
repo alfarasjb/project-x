@@ -19,3 +19,6 @@ drizzle/migrations/meta/_journal.json
 *.tsbuildinfo
 
 .claude/settings.local.json
+
+# Local session files — handoff notes, scratch. Not shared.
+.internal/
