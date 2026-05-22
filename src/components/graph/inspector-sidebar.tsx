@@ -68,6 +68,7 @@ export function InspectorSidebar({
 					</div>
 					<div className="min-h-0 flex-1">
 						<InspectorSubgraph
+							key={selectedNode.id}
 							selectedId={selectedNode.id}
 							nodesById={nodesById}
 							edges={edges}
