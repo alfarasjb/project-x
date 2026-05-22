@@ -1,6 +1,6 @@
 import Fastify from "fastify"
 import cors from "@fastify/cors"
-import { graphRoutes } from "./routes/graph.js"
+import { graphRoutes } from "@server/routes/graph"
 
 const PORT = Number(process.env.PORT ?? 3100)
 

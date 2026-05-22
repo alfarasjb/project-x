@@ -1,6 +1,9 @@
 import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
-import * as schema from "./schema/index.js"
+import { projects } from "@server/db/schema/projects"
+
+// Drizzle's schema object — list every table here (no barrel re-export).
+const schema = { projects }
 
 export type Db = ReturnType<typeof drizzle<typeof schema>>
 

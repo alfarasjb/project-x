@@ -118,7 +118,7 @@ This installs the official shadcn/ui skill which reads `components.json` for pro
 
 Mirror these conventions; re-explore the codebases when in doubt:
 
-- **Code quality & best practices:** [D:\Files\Repositories\PioneerDevAI\Patentext\origin](D:\Files\Repositories\PioneerDevAI\Patentext\origin) — strict tsconfig, Zod boundaries, `AppError` class, colocated `__tests__/`, ESLint flat config, no-semi prettier, thin barrels
+- **Code quality & best practices:** [D:\Files\Repositories\PioneerDevAI\Patentext\origin](D:\Files\Repositories\PioneerDevAI\Patentext\origin) — strict tsconfig, Zod boundaries, `AppError` class, colocated `__tests__/`, ESLint flat config, no-semi prettier
 - **UI & design:** [D:\Files\Repositories\PioneerDevAI\PromptWise](D:\Files\Repositories\PioneerDevAI\PromptWise) — OKLCH tokens, `@theme inline`, CVA variants, custom `@keyframes`, Lucide icons. We use shadcn primitives instead of base-ui but otherwise mirror this design language.
 - **Abstractions:** [D:\Files\Repositories\PioneerDevAI\filipina-meet-app](D:\Files\Repositories\PioneerDevAI\filipina-meet-app) — `domain/` vs `utils/` split, custom error classes, thin fetch wrapper, Zustand per concern + no god-store
 
@@ -126,9 +126,9 @@ Mirror these conventions; re-explore the codebases when in doubt:
 
 Full conventions live in `.claude/projects/.../memory/project_x_conventions.md`. Highlights:
 
-- **TS strictness:** `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`. No `any`. No relative imports across modules — use `@/*`.
+- **TS strictness:** `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`. No `any`. No relative imports — always use the `@/`, `@server/`, `@shared/` aliases. `moduleResolution: bundler`, no `.js` import extensions.
 - **Errors:** Custom `AppError extends Error` with `statusCode` / `cause` / `details`. Caught once at request boundary. Zod at every boundary.
-- **File layout:** Routes call `domain/`, never `utils/` directly. `shared/schemas/` for Zod.
+- **File layout:** Routes call `domain/`, never `utils/` directly. `shared/schemas/` for Zod. No barrel files — import the named module file directly.
 - **Design:** OKLCH CSS vars in `@theme inline`. Dark mode via `.dark` selector property swap, not Tailwind `dark:` prefix. CVA for component variants — no `className` pile-ups at call sites.
 - **State:** Zustand per concern. React Context only for cross-cutting live state (WebSocket). No Redux.
 - **Tests:** Node `test` runner, colocated `__tests__/`, no DB mocks.

@@ -14,7 +14,7 @@ import type {
 	GraphNode,
 	NodeLayer,
 	Signature
-} from "@shared/schemas/graph.js"
+} from "@shared/schemas/graph"
 
 type FunctionLike = FunctionDeclaration | ArrowFunction | FunctionExpression
 
