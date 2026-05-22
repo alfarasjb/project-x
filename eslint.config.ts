@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint"
 import prettier from "eslint-config-prettier"
 
 export default tseslint.config(
-	{ ignores: ["dist/**", "node_modules/**", "src/routeTree.gen.ts", "drizzle/**"] },
+	{ ignores: ["dist/**", "node_modules/**", "src/routeTree.gen.ts", "drizzle/**", ".claude/**"] },
 	js.configs.recommended,
 	...tseslint.configs.strict,
 	...tseslint.configs.stylistic,

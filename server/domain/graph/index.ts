@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm"
-import { GraphSchema, type Graph } from "@shared/schemas/graph.js"
-import { getDb } from "@server/db/index.js"
-import { projects } from "@server/db/schema/projects.js"
+import { GraphSchema, type Graph } from "@shared/schemas/graph"
+import { getDb } from "@server/db"
+import { projects } from "@server/db/schema/projects"
 
 /**
  * Read both halves of a project's graph (intent + actual).

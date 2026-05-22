@@ -2,7 +2,7 @@
 
 > Bidirectional architecture visualization tool. A ReactFlow canvas defines intended architecture; a ts-morph parser produces the actual graph from code; the divergence is surfaced as drift. An MCP server lets AI coding agents read the graph and propose changes.
 
-**Status:** Scaffold landed 2026-05-19. `pnpm install && pnpm dev` boots Vite (5173) + Fastify (3000). MCP stdio stub returns an empty `archlens://graph` resource. No business logic yet.
+**Status:** Scaffold landed 2026-05-19. `pnpm install && pnpm dev` boots Vite (5173) + Fastify (3100). MCP stdio stub returns an empty `archlens://graph` resource. No business logic yet.
 
 ## Canonical reference
 
@@ -12,36 +12,37 @@ The PRD is the source of truth. Fetch before scope/architecture decisions:
 
 ## Stack
 
-| Layer | Choice |
-|---|---|
-| Frontend | Vite + React + TanStack Router + Zustand |
-| Canvas | @xyflow/react (ReactFlow) |
-| UI | shadcn/ui + Tailwind v4 (OKLCH theme) + Lucide icons |
-| Fonts | Inter (sans) + Space Grotesk (display) |
-| Backend | Fastify + fastify-websocket |
-| Parser | ts-morph |
-| File watcher | chokidar |
-| MCP | @modelcontextprotocol/sdk (stdio for local, SSE for remote) |
-| Validation | Zod at every boundary |
-| Storage | Postgres. Graph state (intent + actual) as JSONB columns on `projects`. Users/projects/billing relational. |
-| Billing | Stripe |
-| Deploy | Railway |
+| Layer        | Choice                                                                                                     |
+| ------------ | ---------------------------------------------------------------------------------------------------------- |
+| Frontend     | Vite + React + TanStack Router + Zustand                                                                   |
+| Canvas       | @xyflow/react (ReactFlow)                                                                                  |
+| UI           | shadcn/ui + Tailwind v4 (OKLCH theme) + Lucide icons                                                       |
+| Fonts        | Inter (sans) + Space Grotesk (display)                                                                     |
+| Backend      | Fastify + fastify-websocket                                                                                |
+| Parser       | ts-morph                                                                                                   |
+| File watcher | chokidar                                                                                                   |
+| MCP          | @modelcontextprotocol/sdk (stdio for local, SSE for remote)                                                |
+| Validation   | Zod at every boundary                                                                                      |
+| Storage      | Postgres. Graph state (intent + actual) as JSONB columns on `projects`. Users/projects/billing relational. |
+| Billing      | Stripe                                                                                                     |
+| Deploy       | Railway                                                                                                    |
 
 ## Commands
 
-| Script | What it does |
-|---|---|
-| `pnpm dev` | Boot Vite (5173) + Fastify (3000) concurrently |
-| `pnpm dev:web` | Vite only |
-| `pnpm dev:server` | Fastify only (tsx watch) |
-| `pnpm mcp` | Run the MCP stdio server (for `claude mcp add` or local connection) |
-| `pnpm typecheck` | `tsc -b` across web + server projects |
-| `pnpm lint` | ESLint flat config |
-| `pnpm format` | Prettier write |
-| `pnpm build:web` | Vite production build (frontend only — server build TBD) |
-| `pnpm db:generate` | Drizzle generate migrations from schema |
-| `pnpm db:migrate` | Apply migrations to `DATABASE_URL` |
-| `pnpm db:studio` | Open Drizzle Studio |
+| Script                 | What it does                                                                                                                   |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm dev`             | Boot Vite (5173) + Fastify (3100) concurrently                                                                                 |
+| `pnpm dev:web`         | Vite only                                                                                                                      |
+| `pnpm dev:server`      | Fastify only (tsx watch)                                                                                                       |
+| `pnpm mcp`             | Run the MCP stdio server (for `claude mcp add` or local connection)                                                            |
+| `pnpm typecheck`       | `tsc -b` across web + server projects                                                                                          |
+| `pnpm lint`            | ESLint flat config                                                                                                             |
+| `pnpm format`          | Prettier write                                                                                                                 |
+| `pnpm build:web`       | Vite production build (frontend only — server build TBD)                                                                       |
+| `pnpm routes:generate` | Regenerate `src/routeTree.gen.ts` via the TanStack Router CLI (`tsr generate`) — needed before `typecheck` on a fresh checkout |
+| `pnpm db:generate`     | Drizzle generate migrations from schema                                                                                        |
+| `pnpm db:migrate`      | Apply migrations to `DATABASE_URL`                                                                                             |
+| `pnpm db:studio`       | Open Drizzle Studio                                                                                                            |
 
 Env var: `DATABASE_URL` (postgres) — **required**. Graph state and the relational tables both live there. Health endpoint and MCP stub still boot without it, but the moment you query graphs the lazy connection will throw.
 
@@ -118,7 +119,7 @@ This installs the official shadcn/ui skill which reads `components.json` for pro
 
 Mirror these conventions; re-explore the codebases when in doubt:
 
-- **Code quality & best practices:** [D:\Files\Repositories\PioneerDevAI\Patentext\origin](D:\Files\Repositories\PioneerDevAI\Patentext\origin) — strict tsconfig, Zod boundaries, `AppError` class, colocated `__tests__/`, ESLint flat config, no-semi prettier, thin barrels
+- **Code quality & best practices:** [D:\Files\Repositories\PioneerDevAI\Patentext\origin](D:\Files\Repositories\PioneerDevAI\Patentext\origin) — strict tsconfig, Zod boundaries, `AppError` class, colocated `__tests__/`, ESLint flat config, no-semi prettier
 - **UI & design:** [D:\Files\Repositories\PioneerDevAI\PromptWise](D:\Files\Repositories\PioneerDevAI\PromptWise) — OKLCH tokens, `@theme inline`, CVA variants, custom `@keyframes`, Lucide icons. We use shadcn primitives instead of base-ui but otherwise mirror this design language.
 - **Abstractions:** [D:\Files\Repositories\PioneerDevAI\filipina-meet-app](D:\Files\Repositories\PioneerDevAI\filipina-meet-app) — `domain/` vs `utils/` split, custom error classes, thin fetch wrapper, Zustand per concern + no god-store
 
@@ -126,9 +127,9 @@ Mirror these conventions; re-explore the codebases when in doubt:
 
 Full conventions live in `.claude/projects/.../memory/project_x_conventions.md`. Highlights:
 
-- **TS strictness:** `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`. No `any`. No relative imports across modules — use `@/*`.
+- **TS strictness:** `strict`, `noUncheckedIndexedAccess`, `verbatimModuleSyntax`. No `any`. No relative imports — always use the `@/`, `@server/`, `@shared/` aliases. `moduleResolution: bundler`, no `.js` import extensions.
 - **Errors:** Custom `AppError extends Error` with `statusCode` / `cause` / `details`. Caught once at request boundary. Zod at every boundary.
-- **File layout:** Routes call `domain/`, never `utils/` directly. `shared/schemas/` for Zod.
+- **File layout:** Routes call `domain/`, never `utils/` directly. `shared/schemas/` for Zod. No barrel files — import the named module file directly.
 - **Design:** OKLCH CSS vars in `@theme inline`. Dark mode via `.dark` selector property swap, not Tailwind `dark:` prefix. CVA for component variants — no `className` pile-ups at call sites.
 - **State:** Zustand per concern. React Context only for cross-cutting live state (WebSocket). No Redux.
 - **Tests:** Node `test` runner, colocated `__tests__/`, no DB mocks.
@@ -148,3 +149,4 @@ Full conventions live in `.claude/projects/.../memory/project_x_conventions.md`.
 - Use `code-reviewer` agent before any non-trivial merge — it enforces the conventions above
 - Use `mcp-builder` skill when extending the MCP server's tools/resources
 - Use `frontend-design` + `tailwind-v4-shadcn` skills when building canvas chrome, dashboard pages, or new components
+- **CI** (`.github/workflows/ci.yml`) gates every PR on typecheck + build + lint. A husky pre-commit hook runs `lint-staged` (eslint --fix + prettier) on staged files — committing reformats them.

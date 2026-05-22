@@ -1,28 +1,29 @@
-import { useCallback } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
 	Background,
 	Controls,
 	MiniMap,
 	Panel,
 	ReactFlow,
-	useEdgesState,
-	useNodesState,
-	type Edge,
-	type Node
+	type Node,
+	type NodeMouseHandler
 } from "@xyflow/react"
-import type { Graph, GraphNode } from "@shared/schemas/graph"
+import type { Graph, GraphNode, NodeLayer } from "@shared/schemas/graph"
 import { cn } from "@/lib/utils"
 import { ModuleNode } from "./module-node"
 import { FileNode } from "./file-node"
 import { SymbolNode } from "./symbol-node"
+import { SpotlightEdge } from "./spotlight-edge"
 import { CollapseContext } from "./collapse-context"
+import { SpotlightContext, computeSpotlight } from "./spotlight"
+import { computeNodeStats, formatNodeStats } from "./node-stats"
+import { FILTER_LEVELS, computeVisible, resolveEdges, type FilterLevel } from "./detail"
 import { ALL_LAYERS, LAYER_DOT } from "./node-style"
+import { layoutGraph, type NodeBox } from "./layout"
 
 // Defined once at module scope — re-creating per render breaks ReactFlow internals.
 const nodeTypes = { module: ModuleNode, file: FileNode, symbol: SymbolNode }
-
-/** Height a module shrinks to when collapsed — fits its header + description. */
-const COLLAPSED_HEIGHT = 80
+const edgeTypes = { spotlight: SpotlightEdge }
 
 /** Module → "module", File → "file", everything else → "symbol". */
 function nodeType(kind: string): string {
@@ -31,8 +32,13 @@ function nodeType(kind: string): string {
 	return "symbol"
 }
 
+/** Build the base ReactFlow nodes — data + structure. Layout is applied separately. */
 function toFlowNodes(graph: Graph): Node[] {
 	const byId = new Map(graph.nodes.map((n) => [n.id, n]))
+	const parentIds = new Set(
+		graph.nodes.map((n) => n.parentId).filter((id): id is string => id !== null)
+	)
+	const stats = computeNodeStats(graph)
 
 	/** Nesting depth — used to order parents before children. */
 	function depthOf(node: GraphNode): number {
@@ -45,24 +51,34 @@ function toFlowNodes(graph: Graph): Node[] {
 		return depth
 	}
 
+	/** Nearest layer on the node or any ancestor — files inherit their module's. */
+	function effectiveLayer(node: GraphNode): NodeLayer | undefined {
+		let current: GraphNode | undefined = node
+		while (current) {
+			if (current.layer) return current.layer
+			current = current.parentId ? byId.get(current.parentId) : undefined
+		}
+		return undefined
+	}
+
 	function toRfNode(node: GraphNode): Node {
+		const isModule = node.kind === "module"
+		const stat = stats.get(node.id)
 		return {
 			id: node.id,
 			type: nodeType(node.kind),
-			position: node.position ?? { x: 0, y: 0 },
+			position: { x: 0, y: 0 },
 			parentId: node.parentId ?? undefined,
 			extent: node.parentId ? "parent" : undefined,
-			...(node.size ? { style: { width: node.size.width, height: node.size.height } } : {}),
 			data: {
 				label: node.label,
 				kind: node.kind,
-				layer: node.layer,
+				layer: effectiveLayer(node),
 				path: node.path,
 				signature: node.signature,
 				description: node.description,
-				...(node.kind === "module"
-					? { collapsed: false, fullHeight: node.size?.height }
-					: {})
+				statsLabel: stat ? formatNodeStats(node.kind, stat) : undefined,
+				...(isModule ? { collapsed: false, hasChildren: parentIds.has(node.id) } : {})
 			}
 		}
 	}
@@ -74,106 +90,182 @@ function toFlowNodes(graph: Graph): Node[] {
 		.map(({ node }) => toRfNode(node))
 }
 
-function toFlowEdges(graph: Graph): Edge[] {
-	return graph.edges.map<Edge>((edge) => ({
-		id: edge.id,
-		source: edge.source,
-		target: edge.target,
-		label: edge.kind === "dependency" ? undefined : edge.kind,
-		animated: edge.kind === "data-flow"
-	}))
-}
-
-/** Every node id nested anywhere under `rootId` (files + their primitives). */
-function descendantIds(graph: Graph, rootId: string): Set<string> {
-	const childrenOf = new Map<string, string[]>()
-	for (const node of graph.nodes) {
-		if (!node.parentId) continue
-		const siblings = childrenOf.get(node.parentId) ?? []
-		siblings.push(node.id)
-		childrenOf.set(node.parentId, siblings)
-	}
-
-	const result = new Set<string>()
-	const stack = [rootId]
-	while (stack.length > 0) {
-		const current = stack.pop()
-		if (current === undefined) continue
-		for (const child of childrenOf.get(current) ?? []) {
-			result.add(child)
-			stack.push(child)
+/**
+ * Apply a view's layout boxes to the base nodes — position, size, and the
+ * `hidden` flag (a node absent from `boxes` is outside the current view).
+ */
+function applyLayout(
+	nodes: Node[],
+	boxes: Map<string, NodeBox>,
+	collapsedIds: Set<string>
+): Node[] {
+	return nodes.map((n) => {
+		const box = boxes.get(n.id)
+		const next: Node = {
+			...n,
+			hidden: box === undefined,
+			position: box ? box.position : n.position,
+			...(box ? { style: { width: box.size.width, height: box.size.height } } : {})
 		}
-	}
-	return result
+		if (n.type === "module") {
+			next.data = { ...n.data, collapsed: collapsedIds.has(n.id) }
+		}
+		return next
+	})
 }
 
+/**
+ * Graph canvas. The detail filter and per-module collapse decide which nodes
+ * are visible; each view is laid out fresh as a compact uniform grid, edges are
+ * resolved onto the visible set, and clicking a node spotlights its connected
+ * subgraph. Pane click or Escape clears the spotlight.
+ *
+ * Switching views re-layouts by design — the canvas does not preserve positions
+ * across views; each view is its own space-conserving picture.
+ */
 export function GraphCanvas({ graph }: { graph: Graph }) {
-	const [nodes, setNodes, onNodesChange] = useNodesState(toFlowNodes(graph))
-	const [edges, , onEdgesChange] = useEdgesState(toFlowEdges(graph))
+	const [filterLevel, setFilterLevel] = useState<FilterLevel>("files")
+	const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set())
+	const [selectedId, setSelectedId] = useState<string | null>(null)
 
-	const toggleCollapse = useCallback(
-		(moduleId: string) => {
-			setNodes((current) => {
-				const target = current.find((n) => n.id === moduleId)
-				if (!target) return current
-				const nextCollapsed = !target.data.collapsed
-				const descendants = descendantIds(graph, moduleId)
+	const baseNodes = useMemo(() => toFlowNodes(graph), [graph])
 
-				return current.map((n) => {
-					if (n.id === moduleId) {
-						const fullHeight =
-							typeof n.data.fullHeight === "number" ? n.data.fullHeight : undefined
-						return {
-							...n,
-							data: { ...n.data, collapsed: nextCollapsed },
-							style: {
-								...n.style,
-								height: nextCollapsed ? COLLAPSED_HEIGHT : fullHeight
-							}
-						}
-					}
-					if (descendants.has(n.id)) return { ...n, hidden: nextCollapsed }
-					return n
-				})
-			})
-		},
-		[graph, setNodes]
+	const visible = useMemo(
+		() => computeVisible(graph, filterLevel, collapsedIds),
+		[graph, filterLevel, collapsedIds]
 	)
+	const boxes = useMemo(() => layoutGraph(graph, visible), [graph, visible])
+	const nodes = useMemo(
+		() => applyLayout(baseNodes, boxes, collapsedIds),
+		[baseNodes, boxes, collapsedIds]
+	)
+	const edges = useMemo(() => resolveEdges(graph, visible), [graph, visible])
+
+	const spotlight = useMemo(
+		() => computeSpotlight(graph.nodes, edges, selectedId),
+		[graph, edges, selectedId]
+	)
+
+	// Drop the selection if the current view hides the selected node.
+	useEffect(() => {
+		if (selectedId !== null && !visible.has(selectedId)) setSelectedId(null)
+	}, [visible, selectedId])
+
+	const toggleCollapse = useCallback((moduleId: string) => {
+		setCollapsedIds((prev) => {
+			const next = new Set(prev)
+			if (next.has(moduleId)) next.delete(moduleId)
+			else next.add(moduleId)
+			return next
+		})
+	}, [])
+
+	const collapseAll = useCallback(() => {
+		setCollapsedIds(
+			new Set(graph.nodes.filter((n) => n.kind === "module").map((n) => n.id))
+		)
+	}, [graph])
+
+	const expandAll = useCallback(() => {
+		setCollapsedIds(new Set())
+	}, [])
+
+	const handleNodeClick = useCallback<NodeMouseHandler>((_, node) => {
+		setSelectedId(node.id)
+	}, [])
+
+	const clearSelection = useCallback(() => {
+		setSelectedId(null)
+	}, [])
+
+	// Escape clears the spotlight, same as a pane click.
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === "Escape") setSelectedId(null)
+		}
+		window.addEventListener("keydown", onKey)
+		return () => {
+			window.removeEventListener("keydown", onKey)
+		}
+	}, [])
 
 	return (
 		<div className="h-full w-full">
-			<CollapseContext.Provider value={toggleCollapse}>
-				<ReactFlow
-					nodes={nodes}
-					edges={edges}
-					onNodesChange={onNodesChange}
-					onEdgesChange={onEdgesChange}
-					nodeTypes={nodeTypes}
-					colorMode="dark"
-					fitView
-					minZoom={0.2}
-				>
-					<Background gap={20} />
-					<Controls />
-					<MiniMap pannable zoomable />
-					<Panel position="top-left">
-						<div className="rounded-lg border bg-card/80 px-3 py-2.5 text-xs backdrop-blur">
-							<div className="font-display font-semibold">Project X · graph (seed)</div>
-							<div className="text-muted-foreground">
-								{graph.nodes.length} nodes · {graph.edges.length} edges
+			<SpotlightContext.Provider value={spotlight}>
+				<CollapseContext.Provider value={toggleCollapse}>
+					<ReactFlow
+						// Remount on view change so `fitView` re-frames the fresh
+						// layout; collapse keeps the key and re-packs in place.
+						key={filterLevel}
+						nodes={nodes}
+						edges={edges}
+						onNodeClick={handleNodeClick}
+						onPaneClick={clearSelection}
+						nodeTypes={nodeTypes}
+						edgeTypes={edgeTypes}
+						colorMode="dark"
+						fitView
+						minZoom={0.2}
+					>
+						<Background gap={20} />
+						<Controls />
+						<MiniMap pannable zoomable />
+						<Panel position="top-center">
+							<div className="flex items-center gap-2">
+								<div className="flex gap-0.5 rounded-lg border bg-card/80 p-0.5 backdrop-blur">
+									{FILTER_LEVELS.map((level) => (
+										<button
+											key={level.value}
+											type="button"
+											onClick={() => setFilterLevel(level.value)}
+											aria-pressed={filterLevel === level.value}
+											className={cn(
+												"rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+												filterLevel === level.value
+													? "bg-primary text-primary-foreground"
+													: "text-muted-foreground hover:text-foreground"
+											)}
+										>
+											{level.label}
+										</button>
+									))}
+								</div>
+								<div className="flex gap-0.5 rounded-lg border bg-card/80 p-0.5 backdrop-blur">
+									{[
+										{ label: "Expand all", onClick: expandAll },
+										{ label: "Collapse all", onClick: collapseAll }
+									].map((action) => (
+										<button
+											key={action.label}
+											type="button"
+											onClick={action.onClick}
+											className="rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+										>
+											{action.label}
+										</button>
+									))}
+								</div>
 							</div>
-							<div className="mt-2 flex flex-col gap-1">
-								{ALL_LAYERS.map((layer) => (
-									<div key={layer} className="flex items-center gap-1.5">
-										<span className={cn("size-2 rounded-sm", LAYER_DOT[layer])} />
-										<span className="text-muted-foreground">{layer}</span>
-									</div>
-								))}
+						</Panel>
+						<Panel position="top-left">
+							<div className="rounded-lg border bg-card/80 px-3 py-2.5 text-xs backdrop-blur">
+								<div className="font-display font-semibold">Project X · graph</div>
+								<div className="text-muted-foreground">
+									{graph.nodes.length} nodes · {graph.edges.length} edges
+								</div>
+								<div className="mt-2 flex flex-col gap-1">
+									{ALL_LAYERS.map((layer) => (
+										<div key={layer} className="flex items-center gap-1.5">
+											<span className={cn("size-2 rounded-sm", LAYER_DOT[layer])} />
+											<span className="text-muted-foreground">{layer}</span>
+										</div>
+									))}
+								</div>
 							</div>
-						</div>
-					</Panel>
-				</ReactFlow>
-			</CollapseContext.Provider>
+						</Panel>
+					</ReactFlow>
+				</CollapseContext.Provider>
+			</SpotlightContext.Provider>
 		</div>
 	)
 }

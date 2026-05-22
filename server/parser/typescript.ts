@@ -8,7 +8,13 @@ import {
 	type FunctionExpression,
 	type SourceFile
 } from "ts-morph"
-import type { Graph, GraphEdge, GraphNode, Signature } from "@shared/schemas/graph.js"
+import type {
+	Graph,
+	GraphEdge,
+	GraphNode,
+	NodeLayer,
+	Signature
+} from "@shared/schemas/graph"
 
 type FunctionLike = FunctionDeclaration | ArrowFunction | FunctionExpression
 
@@ -84,6 +90,36 @@ function primitivesOf(sf: SourceFile, filePath: string): GraphNode[] {
 }
 
 /**
+ * Infer an architectural layer from a directory path — best-effort, name-based.
+ * Only confident matches return a layer; a nested module without its own signal
+ * inherits a parent's layer at render time (`effectiveLayer` in the canvas), so
+ * this only needs to tag the directories that carry a clear architectural role.
+ *
+ * Interim: a semantic pass (an LLM reading each module) would classify this
+ * better — folder names are a weak proxy for architectural role.
+ */
+function layerOf(dir: string): NodeLayer | undefined {
+	const segments = dir.split("/")
+	const last = segments[segments.length - 1] ?? ""
+
+	if (segments.includes("node_modules")) return "external"
+	if (last === "routes") return "route"
+	if (last === "components" || last === "ui") return "ui"
+	if (last === "db" || last === "data") return "data"
+	if (last === "domain" || last === "mcp" || last === "parser" || last === "services") {
+		return "service"
+	}
+	if (last === "lib" || last === "utils" || last === "shared" || last === "schemas") {
+		return "shared"
+	}
+	// Top-level roots — a broad fallback for everything nested beneath them.
+	if (dir === "server") return "service"
+	if (dir === "src") return "ui"
+	if (dir === "shared") return "shared"
+	return undefined
+}
+
+/**
  * Parse a TypeScript/JavaScript project into a Graph — topology only, no
  * positions (a layout pass assigns those). Modules are directories, files are
  * source files, primitives are exported declarations.
@@ -135,12 +171,14 @@ export async function parseTypeScript(rootPath: string): Promise<Graph> {
 
 	const moduleNodes: GraphNode[] = [...moduleIds].map((dir) => {
 		const parent = posix.dirname(dir)
+		const layer = layerOf(dir)
 		return {
 			id: dir,
 			path: dir,
 			kind: "module",
 			label: posix.basename(dir),
-			parentId: parent === "." ? null : parent
+			parentId: parent === "." ? null : parent,
+			...(layer ? { layer } : {})
 		}
 	})
 

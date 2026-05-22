@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify"
-import { parseProject } from "../parser/index.js"
+import { parseProject } from "@server/parser"
 
 /**
  * Graph routes. For now: parse the repo the server runs in and return the

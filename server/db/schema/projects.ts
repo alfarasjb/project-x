@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm"
 import { jsonb, text, uniqueIndex, uuid } from "drizzle-orm/pg-core"
-import type { Graph } from "@shared/schemas/graph.js"
-import { schema, timestamps } from "./common.js"
+import type { Graph } from "@shared/schemas/graph"
+import { schema, timestamps } from "@server/db/schema/common"
 
 /**
  * Project — one architecture being modeled.

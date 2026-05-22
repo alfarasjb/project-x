@@ -13,13 +13,35 @@ export const ALL_LAYERS: NodeLayer[] = [
 ]
 
 export const LAYER_BORDER: Record<NodeLayer, string> = {
-	entrypoint: "border-amber-500/40",
-	route: "border-sky-500/40",
-	service: "border-violet-500/40",
-	data: "border-emerald-500/40",
-	ui: "border-pink-500/40",
-	shared: "border-slate-500/40",
-	external: "border-zinc-500/40"
+	entrypoint: "border-amber-500/50",
+	route: "border-sky-500/50",
+	service: "border-violet-500/50",
+	data: "border-emerald-500/50",
+	ui: "border-pink-500/50",
+	shared: "border-slate-500/50",
+	external: "border-zinc-500/50"
+}
+
+/** Box body fill — a faint layer wash so each node reads in colour, not grey. */
+export const LAYER_BG: Record<NodeLayer, string> = {
+	entrypoint: "bg-amber-500/10",
+	route: "bg-sky-500/10",
+	service: "bg-violet-500/10",
+	data: "bg-emerald-500/10",
+	ui: "bg-pink-500/10",
+	shared: "bg-slate-500/10",
+	external: "bg-zinc-500/10"
+}
+
+/** Module header strip — a stronger tint than the body, to anchor the eye. */
+export const LAYER_HEADER: Record<NodeLayer, string> = {
+	entrypoint: "bg-amber-500/20",
+	route: "bg-sky-500/20",
+	service: "bg-violet-500/20",
+	data: "bg-emerald-500/20",
+	ui: "bg-pink-500/20",
+	shared: "bg-slate-500/20",
+	external: "bg-zinc-500/20"
 }
 
 export const LAYER_BADGE: Record<NodeLayer, string> = {

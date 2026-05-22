@@ -1,5 +1,5 @@
-import type { Graph } from "@shared/schemas/graph.js"
-import { parseTypeScript } from "./typescript.js"
+import type { Graph } from "@shared/schemas/graph"
+import { parseTypeScript } from "@server/parser/typescript"
 
 /**
  * A language-specific parser. Each language gets its own implementation; they

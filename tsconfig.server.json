@@ -1,8 +1,6 @@
 {
 	"extends": "./tsconfig.base.json",
 	"compilerOptions": {
-		"module": "NodeNext",
-		"moduleResolution": "NodeNext",
 		"lib": ["ES2022"],
 		"types": ["node"],
 		"composite": true,

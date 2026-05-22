@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
-import { EMPTY_GRAPH } from "@shared/schemas/graph.js"
+import { EMPTY_GRAPH } from "@shared/schemas/graph"
 
 const server = new McpServer(
 	{ name: "project-x", version: "0.0.0" },

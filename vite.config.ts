@@ -4,6 +4,9 @@ import tailwindcss from "@tailwindcss/vite"
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite"
 import path from "node:path"
 
+// Fastify API port — keep in sync with `server/index.ts` (both honour PORT).
+const API_PORT = process.env.PORT ?? "3100"
+
 export default defineConfig({
 	plugins: [
 		TanStackRouterVite({ target: "react", autoCodeSplitting: true }),
@@ -19,8 +22,8 @@ export default defineConfig({
 	server: {
 		port: 5173,
 		proxy: {
-			"/api": { target: "http://localhost:3000", changeOrigin: true },
-			"/ws": { target: "ws://localhost:3000", ws: true }
+			"/api": { target: `http://localhost:${API_PORT}`, changeOrigin: true },
+			"/ws": { target: `ws://localhost:${API_PORT}`, ws: true }
 		}
 	}
 })
