@@ -1,29 +1,23 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { useEffect, useState } from "react"
-import { GraphSchema, type Graph } from "@shared/schemas/graph"
+import { useQuery } from "@tanstack/react-query"
 import { GraphCanvas } from "@/components/graph/graph-canvas"
-import { layoutGraph } from "@/components/graph/layout"
+import { graphQueryOptions } from "@/lib/queries"
 import { seedGraph } from "@/data/seed-graph"
 
 export const Route = createFileRoute("/graph")({
-	component: GraphPage
+	component: GraphPage,
+	loader: ({ context }) => {
+		// Fire-and-forget: warms the cache so the query has data sooner. A parser
+		// failure is surfaced in the component (degrades to the seed), not the
+		// route error boundary — `prefetchQuery` never rejects.
+		void context.queryClient.prefetchQuery(graphQueryOptions())
+	}
 })
 
 function GraphPage() {
-	const [graph, setGraph] = useState<Graph | null>(null)
-	const [error, setError] = useState<string | null>(null)
+	const { data: graph, error, isLoading } = useQuery(graphQueryOptions())
 
-	useEffect(() => {
-		fetch("/api/graph")
-			.then((res) => res.json())
-			.then((data) => setGraph(layoutGraph(GraphSchema.parse(data))))
-			.catch((e: unknown) => {
-				setError(e instanceof Error ? e.message : "failed to parse the repo")
-				setGraph(layoutGraph(seedGraph)) // fall back to the seed
-			})
-	}, [])
-
-	if (!graph) {
+	if (isLoading) {
 		return (
 			<div className="flex h-screen items-center justify-center text-sm text-muted-foreground">
 				parsing the repo…
@@ -33,7 +27,7 @@ function GraphPage() {
 
 	return (
 		<div className="relative h-screen w-full">
-			<GraphCanvas graph={graph} />
+			<GraphCanvas graph={graph ?? seedGraph} />
 			<Link
 				to="/"
 				className="absolute right-4 top-4 z-10 rounded-md border bg-card/80 px-3 py-1.5 text-xs font-medium backdrop-blur hover:bg-card"
@@ -42,7 +36,7 @@ function GraphPage() {
 			</Link>
 			{error && (
 				<div className="text-destructive absolute bottom-4 left-4 z-10 rounded-md border bg-card/80 px-3 py-1.5 text-xs backdrop-blur">
-					parser unavailable — showing the seed ({error})
+					parser unavailable — showing the seed ({error.message})
 				</div>
 			)}
 		</div>
