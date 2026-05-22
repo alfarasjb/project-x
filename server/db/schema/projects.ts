@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm"
 import { jsonb, text, uniqueIndex, uuid } from "drizzle-orm/pg-core"
 import type { Graph } from "@shared/schemas/graph"
-import { schema, timestamps } from "@server/db/schema/common"
+import { schema, timestamp, timestampConfig, timestamps } from "@server/db/schema/common"
 
 /**
  * Project — one architecture being modeled.
@@ -29,7 +29,7 @@ export const projects = schema.table(
 			.$type<Graph>()
 			.notNull()
 			.default(sql`'{"nodes":[],"edges":[]}'::jsonb`),
-		lastParsedAt: timestamps.updatedAt,
+		lastParsedAt: timestamp("last_parsed_at", timestampConfig),
 		createdAt: timestamps.createdAt,
 		updatedAt: timestamps.updatedAt,
 		archivedAt: timestamps.archivedAt

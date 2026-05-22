@@ -4,7 +4,10 @@
 #   docker compose down -v      → stop and wipe data
 #
 # Credentials match .env.example:
-#   DATABASE_URL=postgres://user:password@localhost:5432/projectx
+#   DATABASE_URL=postgres://user:password@localhost:5544/projectx
+#
+# Host port is 5544 (not the default 5432) to avoid clashing with any other
+# local Postgres. The container still listens on 5432 internally.
 
 services:
   postgres:
@@ -16,9 +19,12 @@ services:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: projectx
     ports:
-      - "5432:5432"
+      - "5544:5432"
     volumes:
-      - projectx-pgdata:/var/lib/postgresql/data
+      # Postgres 18+ stores data in a major-version subdirectory and expects the
+      # mount at /var/lib/postgresql (NOT /var/lib/postgresql/data — the pre-18
+      # path, which the 18 image rejects).
+      - projectx-pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U user -d projectx"]
       interval: 5s

@@ -1,7 +1,8 @@
 {
+	// Extends base so the `@/ @server/ @shared/` path aliases are visible to
+	// tools that read the root tsconfig (drizzle-kit's schema bundler). Inert
+	// for `tsc -b` — `files: []` means this config compiles nothing itself.
+	"extends": "./tsconfig.base.json",
 	"files": [],
-	"references": [
-		{ "path": "./tsconfig.web.json" },
-		{ "path": "./tsconfig.server.json" }
-	]
+	"references": [{ "path": "./tsconfig.web.json" }, { "path": "./tsconfig.server.json" }]
 }

@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm"
 import { GraphSchema, type Graph } from "@shared/schemas/graph"
 import { getDb } from "@server/db"
-import { projects } from "@server/db/schema/projects"
+import { projects, type Project } from "@server/db/schema/projects"
+import { parseProject } from "@server/parser"
 
 /**
  * Read both halves of a project's graph (intent + actual).
@@ -40,4 +41,15 @@ export async function saveActualGraph(projectId: string, graph: Graph): Promise<
 		.update(projects)
 		.set({ actualGraph: validated, lastParsedAt: now, updatedAt: now })
 		.where(eq(projects.id, projectId))
+}
+
+/**
+ * Crawl a project: re-parse its codebase and persist the result as the actual
+ * graph. This is the "Crawl" action — the one operation that refreshes the
+ * parsed graph. Reads (`getProjectGraph`) only ever return what a crawl wrote.
+ */
+export async function crawlProject(project: Project): Promise<Graph> {
+	const graph = await parseProject(project.rootPath)
+	await saveActualGraph(project.id, graph)
+	return graph
 }

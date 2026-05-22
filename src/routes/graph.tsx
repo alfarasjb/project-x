@@ -1,44 +1,63 @@
+import type { ReactNode } from "react"
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { GraphCanvas } from "@/components/graph/graph-canvas"
+import { GraphEmptyState } from "@/components/graph/empty-state"
+import { CrawlButton } from "@/components/graph/crawl-button"
 import { graphQueryOptions } from "@/lib/queries"
-import { seedGraph } from "@/data/seed-graph"
 
 export const Route = createFileRoute("/graph")({
 	component: GraphPage,
 	loader: ({ context }) => {
-		// Fire-and-forget: warms the cache so the query has data sooner. A parser
-		// failure is surfaced in the component (degrades to the seed), not the
-		// route error boundary — `prefetchQuery` never rejects.
+		// Fire-and-forget: warms the cache so the canvas paints without a fetch
+		// waterfall. `prefetchQuery` never rejects — load failures surface in the
+		// component below.
 		void context.queryClient.prefetchQuery(graphQueryOptions())
 	}
 })
+
+/** Full-screen centered message — the loading and error states share this frame. */
+function CenteredMessage({ children }: { children: ReactNode }) {
+	return (
+		<div className="text-muted-foreground flex h-screen items-center justify-center px-6 text-center text-sm">
+			{children}
+		</div>
+	)
+}
 
 function GraphPage() {
 	const { data: graph, error, isLoading } = useQuery(graphQueryOptions())
 
 	if (isLoading) {
+		return <CenteredMessage>loading graph…</CenteredMessage>
+	}
+
+	if (error) {
 		return (
-			<div className="flex h-screen items-center justify-center text-sm text-muted-foreground">
-				parsing the repo…
-			</div>
+			<CenteredMessage>
+				<span className="text-destructive">couldn&apos;t load the graph — {error.message}</span>
+			</CenteredMessage>
 		)
+	}
+
+	// Empty stored graph = never crawled. The graph is DB-backed and only a
+	// crawl populates it; we never parse on load.
+	if (!graph || graph.nodes.length === 0) {
+		return <GraphEmptyState />
 	}
 
 	return (
 		<div className="relative h-screen w-full">
-			<GraphCanvas graph={graph ?? seedGraph} />
+			<GraphCanvas graph={graph} />
+			<div className="absolute left-4 top-4 z-10">
+				<CrawlButton />
+			</div>
 			<Link
 				to="/"
 				className="absolute right-4 top-4 z-10 rounded-md border bg-card/80 px-3 py-1.5 text-xs font-medium backdrop-blur hover:bg-card"
 			>
 				← Home
 			</Link>
-			{error && (
-				<div className="text-destructive absolute bottom-4 left-4 z-10 rounded-md border bg-card/80 px-3 py-1.5 text-xs backdrop-blur">
-					parser unavailable — showing the seed ({error.message})
-				</div>
-			)}
 		</div>
 	)
 }

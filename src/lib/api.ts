@@ -18,3 +18,21 @@ export async function apiGet<T>(path: string, schema: ZodType<T>): Promise<T> {
 	}
 	return schema.parse(await res.json())
 }
+
+/**
+ * POST counterpart of `apiGet`. `body` is JSON-encoded when provided; the
+ * response is parsed through `schema` so callers get a validated value. Non-2xx
+ * responses throw — TanStack Query turns the rejection into mutation error
+ * state.
+ */
+export async function apiPost<T>(path: string, schema: ZodType<T>, body?: unknown): Promise<T> {
+	const res = await fetch(path, {
+		method: "POST",
+		headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+		body: body === undefined ? undefined : JSON.stringify(body)
+	})
+	if (!res.ok) {
+		throw new Error(`POST ${path} failed: ${res.status} ${res.statusText}`)
+	}
+	return schema.parse(await res.json())
+}
