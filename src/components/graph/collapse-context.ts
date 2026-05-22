@@ -8,4 +8,6 @@ export type ToggleCollapse = (moduleId: string) => void
  * Avoids baking a callback into node `data` (which would create a circular
  * dependency with `useNodesState`'s setter).
  */
-export const CollapseContext = createContext<ToggleCollapse>(() => {})
+export const CollapseContext = createContext<ToggleCollapse>(() => {
+	/* no-op default — the real toggle is supplied by GraphCanvas's provider */
+})

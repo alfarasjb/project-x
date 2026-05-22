@@ -14,12 +14,23 @@
 		"dev:server": "tsx watch --tsconfig tsconfig.server.json server/index.ts",
 		"mcp": "tsx --tsconfig tsconfig.server.json server/mcp/index.ts",
 		"build:web": "vite build",
+		"routes:generate": "tsr generate",
 		"typecheck": "tsc -b",
 		"lint": "eslint .",
 		"format": "prettier --write .",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
-		"db:studio": "drizzle-kit studio"
+		"db:studio": "drizzle-kit studio",
+		"prepare": "husky"
+	},
+	"lint-staged": {
+		"*.{ts,tsx}": [
+			"eslint --fix --no-warn-ignored",
+			"prettier --write"
+		],
+		"*.{js,mjs,cjs,json,css,md,yml,yaml}": [
+			"prettier --write"
+		]
 	},
 	"dependencies": {
 		"@fastify/cors": "^11.2.0",
@@ -47,6 +58,7 @@
 		"@tailwindcss/vite": "^4.3.0",
 		"@tanstack/react-query-devtools": "^5.100.11",
 		"@tanstack/react-router-devtools": "^1.167.0",
+		"@tanstack/router-cli": "^1.167.9",
 		"@tanstack/router-plugin": "^1.168.6",
 		"@types/node": "^25.9.0",
 		"@types/react": "^19.2.14",
@@ -56,7 +68,9 @@
 		"drizzle-kit": "^0.31.10",
 		"eslint": "^10.4.0",
 		"eslint-config-prettier": "^10.1.8",
+		"husky": "^9.1.7",
 		"jiti": "^2.7.0",
+		"lint-staged": "^17.0.5",
 		"prettier": "^3.8.3",
 		"tailwindcss": "^4.3.0",
 		"tsx": "^4.22.2",
