@@ -6,17 +6,17 @@ import { graphQueryOptions } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
 /**
- * Triggers a repo crawl: re-parses the codebase server-side, persists the
- * result, and pushes the fresh graph straight into the `["graph"]` cache — no
- * refetch, the crawl response *is* the new graph. Reused in the canvas chrome
- * and in the empty state; only one instance is mounted at a time.
+ * Triggers a crawl of one project: re-parses its repo server-side, persists the
+ * result, and pushes the fresh graph straight into the project's graph cache —
+ * no refetch, the crawl response *is* the new graph. Reused in the canvas
+ * chrome and in the empty state.
  */
-export function CrawlButton() {
+export function CrawlButton({ projectId }: { projectId: string }) {
 	const queryClient = useQueryClient()
 	const { mutate, isPending, error } = useMutation({
-		mutationFn: () => apiPost("/api/graph/crawl", GraphSchema),
+		mutationFn: () => apiPost(`/api/projects/${projectId}/graph/crawl`, GraphSchema),
 		onSuccess: (graph) => {
-			queryClient.setQueryData(graphQueryOptions().queryKey, graph)
+			queryClient.setQueryData(graphQueryOptions(projectId).queryKey, graph)
 		}
 	})
 

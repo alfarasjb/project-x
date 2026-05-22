@@ -1,25 +1,27 @@
 import type { FastifyInstance } from "fastify"
 import { EMPTY_GRAPH } from "@shared/schemas/graph"
-import { ensureDefaultProject } from "@server/domain/tenancy"
+import { AppError } from "@server/utils/errors"
 import { crawlProject, getProjectGraph } from "@server/domain/graph"
+import { getProject } from "@server/domain/project"
 
 /**
- * Graph routes.
+ * Graph routes, scoped to a project.
  *
- * `GET /api/graph` reads the *stored* actual graph — it never re-parses, so a
- * page refresh is a cheap DB read. The graph changes only when the user crawls.
- * `POST /api/graph/crawl` re-parses the repo, persists the result, and returns
- * the fresh graph.
+ * `GET /api/projects/:id/graph` reads the *stored* actual graph — it never
+ * re-parses, so a page refresh is a cheap DB read. `POST .../graph/crawl`
+ * re-parses the project's repo, persists the result, and returns it.
  */
 export async function graphRoutes(app: FastifyInstance): Promise<void> {
-	app.get("/api/graph", async () => {
-		const project = await ensureDefaultProject()
+	app.get<{ Params: { id: string } }>("/api/projects/:id/graph", async (request) => {
+		const project = await getProject(request.params.id)
+		if (!project) throw new AppError(404, `Project not found: ${request.params.id}`)
 		const graph = await getProjectGraph(project.id)
 		return graph?.actual ?? EMPTY_GRAPH
 	})
 
-	app.post("/api/graph/crawl", async () => {
-		const project = await ensureDefaultProject()
+	app.post<{ Params: { id: string } }>("/api/projects/:id/graph/crawl", async (request) => {
+		const project = await getProject(request.params.id)
+		if (!project) throw new AppError(404, `Project not found: ${request.params.id}`)
 		return crawlProject(project)
 	})
 }

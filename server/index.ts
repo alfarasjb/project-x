@@ -1,6 +1,7 @@
 import { env } from "@server/env"
 import Fastify from "fastify"
 import cors from "@fastify/cors"
+import { projectRoutes } from "@server/routes/projects"
 import { graphRoutes } from "@server/routes/graph"
 
 const PORT = env.PORT
@@ -15,6 +16,7 @@ app.get("/api/health", () => ({
 	uptime: Math.round(process.uptime())
 }))
 
+await app.register(projectRoutes)
 await app.register(graphRoutes)
 
 try {
