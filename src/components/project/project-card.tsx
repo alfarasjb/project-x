@@ -64,7 +64,7 @@ export function ProjectCard({ project }: { project: Project }) {
 					params={{ projectId: project.id }}
 					className="text-primary mt-3 inline-block text-xs font-medium underline-offset-4 hover:underline"
 				>
-					Open graph →
+					Open →
 				</Link>
 			)}
 		</div>

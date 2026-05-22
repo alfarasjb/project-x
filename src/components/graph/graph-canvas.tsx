@@ -127,7 +127,7 @@ function applyLayout(
  * across views; each view is its own space-conserving picture.
  */
 export function GraphCanvas({ graph }: { graph: Graph }) {
-	const [filterLevel, setFilterLevel] = useState<FilterLevel>("files")
+	const [filterLevel, setFilterLevel] = useState<FilterLevel>("modules")
 	const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set())
 	const [selectedId, setSelectedId] = useState<string | null>(null)
 	const [inspectorOpen, setInspectorOpen] = useState(false)
