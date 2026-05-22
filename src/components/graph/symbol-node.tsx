@@ -17,7 +17,7 @@ export interface SymbolNodeData {
 export type SymbolNodeType = Node<SymbolNodeData, "symbol">
 
 /** Format a signature compactly: `(name: Type, …) → ReturnType`. */
-function formatSignature(sig: Signature): string {
+export function formatSignature(sig: Signature): string {
 	const params = sig.parameters
 		.map((p) => (p.type ? `${p.name}: ${p.type.name}` : p.name))
 		.join(", ")
@@ -46,10 +46,7 @@ export function SymbolNode({ id, data }: NodeProps<SymbolNodeType>) {
 			<Handle type="target" position={Position.Left} />
 			<div className="flex items-center gap-2">
 				<span
-					className={cn(
-						"size-1.5 shrink-0 rounded-full",
-						KIND_DOT[data.kind] ?? DEFAULT_DOT
-					)}
+					className={cn("size-1.5 shrink-0 rounded-full", KIND_DOT[data.kind] ?? DEFAULT_DOT)}
 				/>
 				<span className="truncate text-xs font-medium">{data.label}</span>
 				<span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">

@@ -49,15 +49,15 @@ function GraphPage() {
 	return (
 		<div className="relative h-screen w-full">
 			<GraphCanvas graph={graph} />
-			<div className="absolute left-4 top-4 z-10">
+			<div className="absolute left-4 top-4 z-10 flex items-center gap-2">
+				<Link
+					to="/"
+					className="rounded-md border bg-card/80 px-3 py-1.5 text-xs font-medium backdrop-blur hover:bg-card"
+				>
+					← Projects
+				</Link>
 				<CrawlButton projectId={projectId} />
 			</div>
-			<Link
-				to="/"
-				className="absolute right-4 top-4 z-10 rounded-md border bg-card/80 px-3 py-1.5 text-xs font-medium backdrop-blur hover:bg-card"
-			>
-				← Projects
-			</Link>
 		</div>
 	)
 }
