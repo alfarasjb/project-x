@@ -1,7 +1,7 @@
 import { useContext } from "react"
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react"
 import { ChevronDown, ChevronRight } from "lucide-react"
-import type { Description, NodeLayer } from "@shared/schemas/graph"
+import type { NodeLayer } from "@shared/schemas/graph"
 import { cn } from "@/lib/utils"
 import { CollapseContext } from "./collapse-context"
 import { LAYER_BADGE, LAYER_BG, LAYER_BORDER, LAYER_HEADER } from "./node-style"
@@ -12,7 +12,6 @@ export interface ModuleNodeData {
 	label: string
 	layer?: NodeLayer
 	path: string
-	description?: Description
 	/** True while the module's children are hidden. */
 	collapsed?: boolean
 	/** Whether the module has visible children — false hides the collapse control. */
@@ -43,12 +42,7 @@ export function ModuleNode({ id, data }: NodeProps<ModuleNodeType>) {
 		>
 			<SpotlightOverlay role={role} />
 			<Handle type="target" position={Position.Left} />
-			<div
-				className={cn(
-					"flex items-center gap-1.5 border-b border-inherit px-2.5 py-2",
-					header
-				)}
-			>
+			<div className={cn("flex items-center gap-1.5 border-b border-inherit px-2.5 py-2", header)}>
 				{data.hasChildren && (
 					<button
 						type="button"
@@ -86,11 +80,6 @@ export function ModuleNode({ id, data }: NodeProps<ModuleNodeType>) {
 					</span>
 				)}
 			</div>
-			{data.description && (
-				<p className="px-3 pt-1.5 text-[10px] leading-snug text-muted-foreground">
-					{data.description.what}
-				</p>
-			)}
 			<Handle type="source" position={Position.Right} />
 		</div>
 	)

@@ -44,7 +44,7 @@ The PRD is the source of truth. Fetch before scope/architecture decisions:
 | `pnpm db:migrate`      | Apply migrations to `DATABASE_URL`                                                                                             |
 | `pnpm db:studio`       | Open Drizzle Studio                                                                                                            |
 
-Env var: `DATABASE_URL` (postgres) — **required**. Graph state and the relational tables both live there. `@server/env` loads `.env` (dotenv) and validates it with Zod at import time, so the Fastify server fails fast at boot with a clear message if it's unset — import the typed `env` object rather than reading `process.env`. The MCP stub (`pnpm mcp`) doesn't load `@server/env`, so it still boots without a database.
+Env var: `DATABASE_URL` (postgres) — **required**. Graph state and the relational tables both live there. `@server/env` loads `.env` (dotenv) and validates it with Zod at import time, so the Fastify server fails fast at boot with a clear message if it's unset — import the typed `env` object rather than reading `process.env`. `pnpm mcp` (the MCP server) now loads `@server/env` and the DB too — it serves a project's stored graph, so `DATABASE_URL` is required for it as well. Optional `PROJECT_X_PROJECT` (id or slug) picks which project the MCP server binds to.
 
 ## First-time setup
 
@@ -75,7 +75,9 @@ project-x/
 │   │   └── graph.ts          # /api/projects/:id/graph (read) + /graph/crawl
 │   ├── utils/errors.ts       # AppError — HTTP-status error, caught at the boundary
 │   ├── parser/               # ts-morph parser (index.ts, typescript.ts)
-│   ├── mcp/index.ts          # MCP stdio server, registers archlens://graph
+│   ├── mcp/                  # MCP stdio server — graph resource + describe tools
+│   │   ├── index.ts          # server entry; projectx://graph + list_nodes/get_node/set_description
+│   │   └── project.ts        # resolveBoundProject — binds the server to one project
 │   └── db/
 │       ├── index.ts          # Lazy Drizzle connection
 │       └── schema/

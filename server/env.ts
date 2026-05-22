@@ -14,7 +14,13 @@ config({ quiet: true })
 
 const envSchema = z.object({
 	PORT: z.coerce.number().int().positive().default(3100),
-	DATABASE_URL: z.string().min(1)
+	DATABASE_URL: z.string().min(1),
+	/**
+	 * MCP server only — which project to bind to, given as a project id or slug.
+	 * Optional: the MCP server falls back to matching the cwd, then to the sole
+	 * project. Unused by the Fastify server.
+	 */
+	PROJECT_X_PROJECT: z.string().min(1).optional()
 })
 
 const parsed = envSchema.safeParse(process.env)

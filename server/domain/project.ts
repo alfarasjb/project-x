@@ -46,6 +46,17 @@ export async function getProject(id: string): Promise<Project | null> {
 	return project ?? null
 }
 
+/** Fetch one project by slug. Returns null when no project has that slug. */
+export async function getProjectBySlug(slug: string): Promise<Project | null> {
+	const db = getDb()
+	const [project] = await db
+		.select(projectColumns)
+		.from(projects)
+		.where(eq(projects.slug, slug))
+		.limit(1)
+	return project ?? null
+}
+
 /**
  * Create a project. `rootPath` is resolved to an absolute path and verified to
  * be an existing directory — a bad path is a 400, not a late crawl failure.

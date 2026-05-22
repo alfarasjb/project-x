@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import { posix } from "node:path"
 import {
 	Node,
@@ -8,13 +9,7 @@ import {
 	type FunctionExpression,
 	type SourceFile
 } from "ts-morph"
-import type {
-	Graph,
-	GraphEdge,
-	GraphNode,
-	NodeLayer,
-	Signature
-} from "@shared/schemas/graph"
+import type { Graph, GraphEdge, GraphNode, NodeLayer, Signature } from "@shared/schemas/graph"
 
 type FunctionLike = FunctionDeclaration | ArrowFunction | FunctionExpression
 
@@ -119,26 +114,52 @@ function layerOf(dir: string): NodeLayer | undefined {
 	return undefined
 }
 
+/** Directories never worth parsing — dependencies, build output, VCS metadata. */
+const IGNORED_DIRS = ["node_modules", "dist", "build", "out", ".next", "coverage", ".git"]
+
+/**
+ * Locate the repo's own TypeScript config so ts-morph picks up its path
+ * aliases, `baseUrl`, and module resolution — without them, aliased imports
+ * (`@/…`) don't resolve and dependency edges are lost. Falls back to
+ * `jsconfig.json`, then to no config at all: a config-less or JS-only repo
+ * still parses, just with default compiler options.
+ */
+function resolveTsConfig(root: string): string | undefined {
+	for (const name of ["tsconfig.json", "jsconfig.json"]) {
+		const candidate = `${root}/${name}`
+		if (existsSync(candidate)) return candidate
+	}
+	return undefined
+}
+
 /**
  * Parse a TypeScript/JavaScript project into a Graph — topology only, no
  * positions (a layout pass assigns those). Modules are directories, files are
  * source files, primitives are exported declarations.
+ *
+ * Repo-layout-agnostic: it resolves the target repo's own tsconfig and globs
+ * the whole tree, so any TS/JS project crawls — not just this one.
  */
 export async function parseTypeScript(rootPath: string): Promise<Graph> {
 	const root = rootPath.replace(/\\/g, "/").replace(/\/+$/, "")
 
+	const tsConfigFilePath = resolveTsConfig(root)
 	const project = new Project({
-		tsConfigFilePath: `${root}/tsconfig.base.json`,
+		...(tsConfigFilePath ? { tsConfigFilePath } : {}),
+		// We read written annotations + in-repo imports only — never type-check.
+		// Without these three, ts-morph recursively resolves every dependency and
+		// parses the whole `node_modules` .d.ts tree, which makes a crawl crawl.
 		skipAddingFilesFromTsConfig: true,
-		compilerOptions: { jsx: ts.JsxEmit.ReactJSX }
+		skipFileDependencyResolution: true,
+		skipLoadingLibFiles: true,
+		// ReactJSX + allowJs just guarantee .tsx and .js files load.
+		compilerOptions: { jsx: ts.JsxEmit.ReactJSX, allowJs: true }
 	})
 	project.addSourceFilesAtPaths([
-		`${root}/src/**/*.{ts,tsx}`,
-		`${root}/server/**/*.ts`,
-		`${root}/shared/**/*.ts`,
-		`!${root}/**/*.gen.ts`,
+		`${root}/**/*.{ts,tsx,js,jsx}`,
 		`!${root}/**/*.d.ts`,
-		`!${root}/**/node_modules/**`
+		`!${root}/**/*.gen.*`,
+		...IGNORED_DIRS.map((dir) => `!${root}/**/${dir}/**`)
 	])
 
 	const sourceFiles = project.getSourceFiles()
