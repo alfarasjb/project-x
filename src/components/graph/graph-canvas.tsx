@@ -20,6 +20,7 @@ import { computeNodeStats, formatNodeStats } from "./node-stats"
 import { FILTER_LEVELS, computeVisible, resolveEdges, type FilterLevel } from "./detail"
 import { ALL_LAYERS, LAYER_DOT } from "./node-style"
 import { layoutGraph, type NodeBox } from "./layout"
+import { InspectorSidebar } from "./inspector-sidebar"
 
 // Defined once at module scope — re-creating per render breaks ReactFlow internals.
 const nodeTypes = { module: ModuleNode, file: FileNode, symbol: SymbolNode }
@@ -127,6 +128,7 @@ export function GraphCanvas({ graph }: { graph: Graph }) {
 	const [filterLevel, setFilterLevel] = useState<FilterLevel>("files")
 	const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set())
 	const [selectedId, setSelectedId] = useState<string | null>(null)
+	const [inspectorOpen, setInspectorOpen] = useState(false)
 
 	const baseNodes = useMemo(() => toFlowNodes(graph), [graph])
 
@@ -161,9 +163,7 @@ export function GraphCanvas({ graph }: { graph: Graph }) {
 	}, [])
 
 	const collapseAll = useCallback(() => {
-		setCollapsedIds(
-			new Set(graph.nodes.filter((n) => n.kind === "module").map((n) => n.id))
-		)
+		setCollapsedIds(new Set(graph.nodes.filter((n) => n.kind === "module").map((n) => n.id)))
 	}, [graph])
 
 	const expandAll = useCallback(() => {
@@ -172,10 +172,15 @@ export function GraphCanvas({ graph }: { graph: Graph }) {
 
 	const handleNodeClick = useCallback<NodeMouseHandler>((_, node) => {
 		setSelectedId(node.id)
+		setInspectorOpen(true)
 	}, [])
 
 	const clearSelection = useCallback(() => {
 		setSelectedId(null)
+	}, [])
+
+	const toggleInspector = useCallback(() => {
+		setInspectorOpen((open) => !open)
 	}, [])
 
 	// Escape clears the spotlight, same as a pane click.
@@ -190,82 +195,92 @@ export function GraphCanvas({ graph }: { graph: Graph }) {
 	}, [])
 
 	return (
-		<div className="h-full w-full">
-			<SpotlightContext.Provider value={spotlight}>
-				<CollapseContext.Provider value={toggleCollapse}>
-					<ReactFlow
-						// Remount on view change so `fitView` re-frames the fresh
-						// layout; collapse keeps the key and re-packs in place.
-						key={filterLevel}
-						nodes={nodes}
-						edges={edges}
-						onNodeClick={handleNodeClick}
-						onPaneClick={clearSelection}
-						nodeTypes={nodeTypes}
-						edgeTypes={edgeTypes}
-						colorMode="dark"
-						fitView
-						minZoom={0.2}
-					>
-						<Background gap={20} />
-						<Controls />
-						<MiniMap pannable zoomable />
-						<Panel position="top-center">
-							<div className="flex items-center gap-2">
-								<div className="flex gap-0.5 rounded-lg border bg-card/80 p-0.5 backdrop-blur">
-									{FILTER_LEVELS.map((level) => (
-										<button
-											key={level.value}
-											type="button"
-											onClick={() => setFilterLevel(level.value)}
-											aria-pressed={filterLevel === level.value}
-											className={cn(
-												"rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-												filterLevel === level.value
-													? "bg-primary text-primary-foreground"
-													: "text-muted-foreground hover:text-foreground"
-											)}
-										>
-											{level.label}
-										</button>
-									))}
+		<div className="flex h-full w-full">
+			<div className="relative h-full flex-1">
+				<SpotlightContext.Provider value={spotlight}>
+					<CollapseContext.Provider value={toggleCollapse}>
+						<ReactFlow
+							// Remount on view change so `fitView` re-frames the fresh
+							// layout; collapse keeps the key and re-packs in place.
+							key={filterLevel}
+							nodes={nodes}
+							edges={edges}
+							onNodeClick={handleNodeClick}
+							onPaneClick={clearSelection}
+							nodeTypes={nodeTypes}
+							edgeTypes={edgeTypes}
+							colorMode="dark"
+							fitView
+							minZoom={0.2}
+						>
+							<Background gap={20} />
+							<Controls />
+							<MiniMap pannable zoomable />
+							<Panel position="top-center">
+								<div className="flex items-center gap-2">
+									<div className="flex gap-0.5 rounded-lg border bg-card/80 p-0.5 backdrop-blur">
+										{FILTER_LEVELS.map((level) => (
+											<button
+												key={level.value}
+												type="button"
+												onClick={() => setFilterLevel(level.value)}
+												aria-pressed={filterLevel === level.value}
+												className={cn(
+													"rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+													filterLevel === level.value
+														? "bg-primary text-primary-foreground"
+														: "text-muted-foreground hover:text-foreground"
+												)}
+											>
+												{level.label}
+											</button>
+										))}
+									</div>
+									<div className="flex gap-0.5 rounded-lg border bg-card/80 p-0.5 backdrop-blur">
+										{[
+											{ label: "Expand all", onClick: expandAll },
+											{ label: "Collapse all", onClick: collapseAll }
+										].map((action) => (
+											<button
+												key={action.label}
+												type="button"
+												onClick={action.onClick}
+												className="rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+											>
+												{action.label}
+											</button>
+										))}
+									</div>
 								</div>
-								<div className="flex gap-0.5 rounded-lg border bg-card/80 p-0.5 backdrop-blur">
-									{[
-										{ label: "Expand all", onClick: expandAll },
-										{ label: "Collapse all", onClick: collapseAll }
-									].map((action) => (
-										<button
-											key={action.label}
-											type="button"
-											onClick={action.onClick}
-											className="rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-										>
-											{action.label}
-										</button>
-									))}
+							</Panel>
+							<Panel position="top-right">
+								<div className="rounded-lg border bg-card/80 px-3 py-2.5 text-xs backdrop-blur">
+									<div className="font-display font-semibold">Project X · graph</div>
+									<div className="text-muted-foreground">
+										{graph.nodes.length} nodes · {graph.edges.length} edges
+									</div>
+									<div className="mt-2 flex flex-col gap-1">
+										{ALL_LAYERS.map((layer) => (
+											<div key={layer} className="flex items-center gap-1.5">
+												<span className={cn("size-2 rounded-sm", LAYER_DOT[layer])} />
+												<span className="text-muted-foreground">{layer}</span>
+											</div>
+										))}
+									</div>
 								</div>
-							</div>
-						</Panel>
-						<Panel position="top-left">
-							<div className="rounded-lg border bg-card/80 px-3 py-2.5 text-xs backdrop-blur">
-								<div className="font-display font-semibold">Project X · graph</div>
-								<div className="text-muted-foreground">
-									{graph.nodes.length} nodes · {graph.edges.length} edges
-								</div>
-								<div className="mt-2 flex flex-col gap-1">
-									{ALL_LAYERS.map((layer) => (
-										<div key={layer} className="flex items-center gap-1.5">
-											<span className={cn("size-2 rounded-sm", LAYER_DOT[layer])} />
-											<span className="text-muted-foreground">{layer}</span>
-										</div>
-									))}
-								</div>
-							</div>
-						</Panel>
-					</ReactFlow>
-				</CollapseContext.Provider>
-			</SpotlightContext.Provider>
+							</Panel>
+						</ReactFlow>
+					</CollapseContext.Provider>
+				</SpotlightContext.Provider>
+			</div>
+			<InspectorSidebar
+				graph={graph}
+				edges={edges}
+				selectedId={selectedId}
+				open={inspectorOpen}
+				onToggle={toggleInspector}
+				onSelect={setSelectedId}
+			/>
 		</div>
 	)
 }
