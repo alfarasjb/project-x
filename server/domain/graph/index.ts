@@ -88,3 +88,52 @@ export async function setNodeDescription(
 	await saveActualGraph(projectId, graph.actual)
 	return node
 }
+
+/** A node plus its immediate graph context — containment and edges. */
+export interface NodeDetail {
+	node: GraphNode
+	/** Containment parent, or null at the top level. */
+	parent: GraphNode | null
+	/** Nodes contained directly inside this one. */
+	children: GraphNode[]
+	/** Nodes this node depends on — the targets of its outgoing edges. */
+	dependencies: GraphNode[]
+	/** Nodes that depend on this one — the sources of its incoming edges. */
+	dependents: GraphNode[]
+}
+
+/**
+ * Resolve one node's detail in the stored actual graph: the node itself plus
+ * its containment parent/children and its edge neighbours. This is the unit an
+ * agent walks to trace a flow — follow `dependencies` to the next node, repeat.
+ *
+ * Throws if the project or node is unknown.
+ */
+export async function getNodeDetail(projectId: string, nodeId: string): Promise<NodeDetail> {
+	const graph = await getProjectGraph(projectId)
+	if (!graph) throw new AppError(404, `Project not found: ${projectId}`)
+
+	const { nodes, edges } = graph.actual
+	const byId = new Map(nodes.map((node) => [node.id, node]))
+	const node = byId.get(nodeId)
+	if (!node) throw new AppError(404, `No node "${nodeId}" in the actual graph.`)
+
+	const resolve = (id: string | undefined): GraphNode | undefined =>
+		id === undefined ? undefined : byId.get(id)
+	const present = (candidate: GraphNode | undefined): candidate is GraphNode =>
+		candidate !== undefined
+
+	return {
+		node,
+		parent: resolve(node.parentId ?? undefined) ?? null,
+		children: nodes.filter((candidate) => candidate.parentId === nodeId),
+		dependencies: edges
+			.filter((edge) => edge.source === nodeId)
+			.map((edge) => resolve(edge.target))
+			.filter(present),
+		dependents: edges
+			.filter((edge) => edge.target === nodeId)
+			.map((edge) => resolve(edge.source))
+			.filter(present)
+	}
+}

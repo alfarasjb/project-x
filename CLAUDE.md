@@ -76,7 +76,7 @@ project-x/
 │   ├── utils/errors.ts       # AppError — HTTP-status error, caught at the boundary
 │   ├── parser/               # ts-morph parser (index.ts, typescript.ts)
 │   ├── mcp/                  # MCP stdio server — graph resource + describe tools
-│   │   ├── index.ts          # server entry; projectx://graph + list_files/set_description
+│   │   ├── index.ts          # server entry; projectx://graph + list_nodes/get_node/set_description
 │   │   └── project.ts        # resolveBoundProject — binds the server to one project
 │   └── db/
 │       ├── index.ts          # Lazy Drizzle connection

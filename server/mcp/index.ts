@@ -1,21 +1,37 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod"
-import { EMPTY_GRAPH, type Description } from "@shared/schemas/graph"
-import { getProjectGraph, setNodeDescription } from "@server/domain/graph"
+import { EMPTY_GRAPH, type Description, type GraphNode } from "@shared/schemas/graph"
+import { getNodeDetail, getProjectGraph, setNodeDescription } from "@server/domain/graph"
 import { resolveBoundProject } from "@server/mcp/project"
 
 /**
  * Project X MCP server (stdio).
  *
  * Exposes one project's architecture graph to an MCP agent — so the agent
- * (Claude Code) can read the graph to reason about the codebase, and write
- * file descriptions back into it. The server binds to a single project for the
- * whole session (`resolveBoundProject`), so no tool takes a project argument.
+ * (Claude Code) can read the graph to reason about the codebase, trace flows,
+ * and write descriptions back into it. The server binds to a single project
+ * for the whole session (`resolveBoundProject`), so no tool takes a project
+ * argument.
  *
  * stdio rule: never write to stdout — it's the protocol channel. Diagnostics go
  * to stderr via `console.error`.
  */
+
+/** Project-scoped tool error → an MCP error result the agent can read. */
+function toolError(error: unknown): { isError: true; content: { type: "text"; text: string }[] } {
+	return {
+		isError: true,
+		content: [
+			{ type: "text", text: `Error: ${error instanceof Error ? error.message : String(error)}` }
+		]
+	}
+}
+
+/** A node trimmed to the fields worth showing in a list or an edge reference. */
+function briefNode(node: GraphNode): { id: string; kind: string; label: string } {
+	return { id: node.id, kind: node.kind, label: node.label }
+}
 
 async function main(): Promise<void> {
 	const project = await resolveBoundProject()
@@ -50,28 +66,34 @@ async function main(): Promise<void> {
 		}
 	)
 
-	// --- Tool: list files ----------------------------------------------------
+	// --- Tool: list nodes ----------------------------------------------------
 	server.registerTool(
-		"projectx_list_files",
+		"projectx_list_nodes",
 		{
-			title: "List files",
-			description: `List the file nodes in the architecture graph for "${project.name}", each with its current description.
+			title: "List graph nodes",
+			description: `List nodes in the architecture graph for "${project.name}" — modules (folders) and files — each with its current description.
 
-Use this to see which files still need a description (filter described=false), and to fetch descriptions that already exist.
+Use this to take inventory of the codebase and to find which nodes still need a description (filter described=false). To inspect one node's connections, use projectx_get_node. To read the entire graph at once, use the projectx://graph resource.
 
 Args:
-  - described (boolean, optional): true → only files with a description; false → only files without one; omit → all files.
-  - limit (number): max files to return, 1-500 (default 200).
-  - offset (number): files to skip, for pagination (default 0).
+  - kind (string, optional): restrict to one kind, e.g. "module" or "file". Omit for both modules and files (symbol-level nodes are excluded).
+  - described (boolean, optional): true → only nodes with a description; false → only nodes without one; omit → all.
+  - limit (number): max nodes to return, 1-500 (default 200).
+  - offset (number): nodes to skip, for pagination (default 0).
 
-Returns JSON: { total, count, offset, has_more, files: [{ id, path, label, described, description }] }. A file's "id" is its path — pass it as node_id to projectx_set_description.`,
+Returns JSON: { total, count, offset, has_more, nodes: [{ id, path, kind, label, described, description }] }. A node's "id" is its path — pass it as node_id to projectx_get_node or projectx_set_description.`,
 			inputSchema: {
+				kind: z
+					.string()
+					.min(1)
+					.optional()
+					.describe('Restrict to one kind, e.g. "module" or "file". Omit for modules + files.'),
 				described: z
 					.boolean()
 					.optional()
-					.describe("Filter by whether the file has a description. Omit for all files."),
-				limit: z.number().int().min(1).max(500).default(200).describe("Max files to return."),
-				offset: z.number().int().min(0).default(0).describe("Files to skip, for pagination.")
+					.describe("Filter by whether the node has a description. Omit for all nodes."),
+				limit: z.number().int().min(1).max(500).default(200).describe("Max nodes to return."),
+				offset: z.number().int().min(0).default(0).describe("Nodes to skip, for pagination.")
 			},
 			annotations: {
 				readOnlyHint: true,
@@ -80,23 +102,27 @@ Returns JSON: { total, count, offset, has_more, files: [{ id, path, label, descr
 				openWorldHint: false
 			}
 		},
-		async ({ described, limit, offset }) => {
+		async ({ kind, described, limit, offset }) => {
 			try {
 				const graph = await getProjectGraph(project.id)
-				const files = (graph?.actual.nodes ?? []).filter((node) => node.kind === "file")
+				const all = graph?.actual.nodes ?? []
+				const byKind = kind
+					? all.filter((node) => node.kind === kind)
+					: all.filter((node) => node.kind === "module" || node.kind === "file")
 				const filtered =
 					described === undefined
-						? files
-						: files.filter((node) => (node.description !== undefined) === described)
+						? byKind
+						: byKind.filter((node) => (node.description !== undefined) === described)
 				const page = filtered.slice(offset, offset + limit)
 				const result = {
 					total: filtered.length,
 					count: page.length,
 					offset,
 					has_more: offset + page.length < filtered.length,
-					files: page.map((node) => ({
+					nodes: page.map((node) => ({
 						id: node.id,
 						path: node.path,
+						kind: node.kind,
 						label: node.label,
 						described: node.description !== undefined,
 						description: node.description ?? null
@@ -104,15 +130,62 @@ Returns JSON: { total, count, offset, has_more, files: [{ id, path, label, descr
 				}
 				return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
 			} catch (error) {
-				return {
-					isError: true,
-					content: [
-						{
-							type: "text",
-							text: `Error: ${error instanceof Error ? error.message : String(error)}`
-						}
-					]
+				return toolError(error)
+			}
+		}
+	)
+
+	// --- Tool: get node ------------------------------------------------------
+	server.registerTool(
+		"projectx_get_node",
+		{
+			title: "Get node detail",
+			description: `Get full detail for one node in the architecture graph for "${project.name}": its kind, path, layer, signature, description, containment children, and the edges in and out of it.
+
+Use this to inspect a specific node and to TRACE A FLOW — get a node, follow one of its "dependencies" to the next node, call projectx_get_node again, and repeat. Use projectx_list_nodes to discover node ids; read the projectx://graph resource when you want the whole graph at once.
+
+Args:
+  - node_id (string): the node's id, which is its path (e.g. "server/domain/graph/index.ts" for a file, or "server/domain/graph" for a module).
+
+Returns JSON: {
+  id, path, kind, label, layer, signature, description,
+  parent: { id, label } | null,
+  children: [{ id, kind, label }],       // nodes contained inside this one
+  dependencies: [{ id, kind, label }],   // nodes this node imports / depends on
+  dependents: [{ id, kind, label }]      // nodes that import / depend on this one
+}. Errors if the node is unknown.`,
+			inputSchema: {
+				node_id: z
+					.string()
+					.min(1)
+					.describe('The node id (its path), e.g. "server/domain/graph/index.ts".')
+			},
+			annotations: {
+				readOnlyHint: true,
+				destructiveHint: false,
+				idempotentHint: true,
+				openWorldHint: false
+			}
+		},
+		async ({ node_id }) => {
+			try {
+				const detail = await getNodeDetail(project.id, node_id)
+				const result = {
+					id: detail.node.id,
+					path: detail.node.path,
+					kind: detail.node.kind,
+					label: detail.node.label,
+					layer: detail.node.layer ?? null,
+					signature: detail.node.signature ?? null,
+					description: detail.node.description ?? null,
+					parent: detail.parent ? { id: detail.parent.id, label: detail.parent.label } : null,
+					children: detail.children.map(briefNode),
+					dependencies: detail.dependencies.map(briefNode),
+					dependents: detail.dependents.map(briefNode)
 				}
+				return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
+			} catch (error) {
+				return toolError(error)
 			}
 		}
 	)
@@ -124,28 +197,33 @@ Returns JSON: { total, count, offset, has_more, files: [{ id, path, label, descr
 			title: "Set node description",
 			description: `Write a description onto a node in the architecture graph for "${project.name}" (recorded with source "ai").
 
-Intended for describing files: read the file, then summarise it here. The "what" field is the searchable summary — keep it concise and specific.
+Intended for describing files and modules: read the code, then summarise it here. The "what" field is the searchable summary — keep it concise and specific.
 
 Args:
-  - node_id (string): the node's id, which is its path (e.g. "src/lib/utils.ts"). Get ids from projectx_list_files.
-  - what (string): a concise summary of what the file does. Required.
-  - why (string, optional): rationale — why the file exists or its design intent.
+  - node_id (string): the node's id, which is its path (e.g. "src/lib/utils.ts" for a file, "src/lib" for a module). Get ids from projectx_list_nodes.
+  - what (string): a concise summary of what the file or module does. Required.
+  - why (string, optional): rationale — why it exists or its design intent.
   - overwrite (boolean): replace an existing human-authored ("manual") description (default false).
 
 Returns JSON: { ok: true, node: { id, path, description } }. Errors if the node is unknown, or if it has a manual description and overwrite is false.`,
 			inputSchema: {
-				node_id: z.string().min(1).describe('The node id (its path), e.g. "src/lib/utils.ts".'),
+				node_id: z
+					.string()
+					.min(1)
+					.describe('The node id (its path), e.g. "src/lib/utils.ts" or "src/lib".'),
 				what: z
 					.string()
 					.min(1)
 					.max(2000)
-					.describe("Concise summary of what the file does — the searchable description."),
+					.describe(
+						"Concise summary of what the file or module does — the searchable description."
+					),
 				why: z
 					.string()
 					.min(1)
 					.max(2000)
 					.optional()
-					.describe("Optional rationale — why the file exists or its design intent."),
+					.describe("Optional rationale — why it exists or its design intent."),
 				overwrite: z
 					.boolean()
 					.default(false)
@@ -175,15 +253,7 @@ Returns JSON: { ok: true, node: { id, path, description } }. Errors if the node 
 					]
 				}
 			} catch (error) {
-				return {
-					isError: true,
-					content: [
-						{
-							type: "text",
-							text: `Error: ${error instanceof Error ? error.message : String(error)}`
-						}
-					]
-				}
+				return toolError(error)
 			}
 		}
 	)
