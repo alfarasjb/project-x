@@ -2,6 +2,8 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react"
 import type { Description, Signature } from "@shared/schemas/graph"
 import { cn } from "@/lib/utils"
 import { DEFAULT_DOT, KIND_DOT } from "./node-style"
+import { SpotlightOverlay } from "./spotlight-overlay"
+import { useNodeSpotlight } from "./spotlight"
 
 export interface SymbolNodeData {
 	label: string
@@ -24,7 +26,8 @@ function formatSignature(sig: Signature): string {
 }
 
 /** A leaf node — a function, class, constant, type, or other symbol. */
-export function SymbolNode({ data, selected }: NodeProps<SymbolNodeType>) {
+export function SymbolNode({ id, data }: NodeProps<SymbolNodeType>) {
+	const role = useNodeSpotlight(id)
 	const tooltip = data.description
 		? data.description.why
 			? `${data.description.what}\n\nWhy: ${data.description.why}`
@@ -34,11 +37,12 @@ export function SymbolNode({ data, selected }: NodeProps<SymbolNodeType>) {
 	return (
 		<div
 			className={cn(
-				"flex w-[230px] flex-col gap-0.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm",
-				selected && "ring-2 ring-ring"
+				"relative flex w-[230px] flex-col gap-0.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm transition-opacity duration-200",
+				role === "dimmed" && "opacity-40"
 			)}
 			title={tooltip}
 		>
+			<SpotlightOverlay role={role} />
 			<Handle type="target" position={Position.Top} />
 			<div className="flex items-center gap-2">
 				<span

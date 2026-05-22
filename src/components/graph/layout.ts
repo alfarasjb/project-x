@@ -11,10 +11,15 @@ import type { Graph, GraphNode, Position, Size } from "@shared/schemas/graph"
  */
 
 const LEAF_WIDTH = 230
-const LEAF_HEIGHT = 72 // generous — a symbol node with a wrapped signature
+// Leaf-height estimates — symbol nodes auto-size, so these only drive the
+// parent's stacking math. A signed leaf (a function) carries a possibly-wrapped
+// signature line; a plain leaf (class, type, constant…) is just its label row.
+const LEAF_HEIGHT_PLAIN = 36
+const LEAF_HEIGHT_SIGNED = 62
 const HEADER = 48 // module/file header strip
 const PAD = 16 // inner padding around a container's children
-const GAP = 14 // vertical gap between siblings
+const GAP = 14 // vertical gap between module/file siblings
+const LEAF_GAP = 8 // tighter gap between leaf primitives
 const TOP_GAP = 120 // horizontal gap between top-level modules
 
 export function layoutGraph(graph: Graph): Graph {
@@ -35,15 +40,21 @@ export function layoutGraph(graph: Graph): Graph {
 		if (children.length === 0) {
 			// Leaf — return an estimate for the parent's stacking math, but
 			// don't pin a size (leaf nodes auto-size to their content).
-			return { width: LEAF_WIDTH, height: LEAF_HEIGHT }
+			const height = node.signature ? LEAF_HEIGHT_SIGNED : LEAF_HEIGHT_PLAIN
+			return { width: LEAF_WIDTH, height }
 		}
+
+		// Pack a container whose children are all leaves (a file of primitives)
+		// with the tighter leaf gap; modules of files/modules use the normal gap.
+		const childrenAreLeaves = children.every((child) => !childrenOf.has(child.id))
+		const gap = childrenAreLeaves ? LEAF_GAP : GAP
 
 		let y = HEADER
 		let maxWidth = 0
 		for (const child of children) {
 			const childSize = layout(child)
 			positions.set(child.id, { x: PAD, y })
-			y += childSize.height + GAP
+			y += childSize.height + gap
 			maxWidth = Math.max(maxWidth, childSize.width)
 		}
 
