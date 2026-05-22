@@ -44,14 +44,14 @@ The PRD is the source of truth. Fetch before scope/architecture decisions:
 | `pnpm db:migrate`      | Apply migrations to `DATABASE_URL`                                                                                             |
 | `pnpm db:studio`       | Open Drizzle Studio                                                                                                            |
 
-Env var: `DATABASE_URL` (postgres) — **required**. Graph state and the relational tables both live there. Health endpoint and MCP stub still boot without it, but the moment you query graphs the lazy connection will throw.
+Env var: `DATABASE_URL` (postgres) — **required**. Graph state and the relational tables both live there. `@server/env` loads `.env` (dotenv) and validates it with Zod at import time, so the Fastify server fails fast at boot with a clear message if it's unset — import the typed `env` object rather than reading `process.env`. The MCP stub (`pnpm mcp`) doesn't load `@server/env`, so it still boots without a database.
 
 ## First-time setup
 
 ```sh
 pnpm install
 cp .env.example .env          # credentials already match docker-compose.yml
-docker compose up -d          # local Postgres 18 on :5432
+docker compose up -d          # local Postgres 18 on :5544 (host port, not 5432)
 pnpm db:generate              # generate the first migration from schema
 pnpm db:migrate               # apply it
 pnpm dev                      # boot Vite + Fastify
@@ -143,6 +143,9 @@ Full conventions live in `.claude/projects/.../memory/project_x_conventions.md`.
 - **`nodeTypes` / `edgeTypes`:** Define once at module scope. Re-creating these objects per render breaks ReactFlow's internals.
 - **MCP transport:** stdio for local Claude Code integration, SSE for remote agents. We support both.
 - **The graph isn't a blueprint:** It's the live diff between intent (user-edited graph) and reality (parsed graph). When making product decisions, always ask: "does this preserve the diff semantics?"
+- **The graph is DB-backed, crawl is explicit:** `GET /api/graph` reads the stored `actual_graph` JSONB — it never re-parses. `POST /api/graph/crawl` re-parses the repo and persists the result. The UI "Crawl" button is the only thing that refreshes the parsed graph; a page refresh is a cheap DB read.
+- **Tenancy is stubbed:** `server/domain/tenancy.ts` — `ensureDefaultProject()` resolves the single local project (idempotent upsert); `ensureDefaultOrg()` is a constant-id placeholder. Multi-tenancy (orgs, auth) is deferred — these resolvers are the seam where real session/membership checks plug in later.
+- **drizzle-kit reads the root `tsconfig.json`:** it must `extends` `tsconfig.base.json` so the `@server/ @shared/` aliases in the schema files resolve during `db:generate`.
 
 ## Workflow
 

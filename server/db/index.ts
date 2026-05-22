@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
+import { env } from "@server/env"
 import { projects } from "@server/db/schema/projects"
 
 // Drizzle's schema object — list every table here (no barrel re-export).
@@ -9,15 +10,14 @@ export type Db = ReturnType<typeof drizzle<typeof schema>>
 
 let cached: Db | null = null
 
+/**
+ * Lazy Drizzle connection. `DATABASE_URL` is validated at boot in `@server/env`,
+ * so by the time this runs it is guaranteed present; the connection itself is
+ * still opened on first use, not at import.
+ */
 export function getDb(): Db {
 	if (cached) return cached
-	const url = process.env.DATABASE_URL
-	if (!url) {
-		throw new Error(
-			"DATABASE_URL is not set. Postgres is required — graph state (intent + actual) lives in JSONB columns on the projects table."
-		)
-	}
-	const client = postgres(url, { prepare: false })
+	const client = postgres(env.DATABASE_URL, { prepare: false })
 	cached = drizzle(client, { schema })
 	return cached
 }

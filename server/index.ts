@@ -1,8 +1,9 @@
+import { env } from "@server/env"
 import Fastify from "fastify"
 import cors from "@fastify/cors"
 import { graphRoutes } from "@server/routes/graph"
 
-const PORT = Number(process.env.PORT ?? 3100)
+const PORT = env.PORT
 
 const app = Fastify({ logger: { level: "info" } })
 
