@@ -73,7 +73,7 @@ cp .env.example .env          # credentials already match docker-compose.yml
 docker compose up -d          # local Postgres
 pnpm db:generate              # generate the first migration
 pnpm db:migrate               # apply it
-pnpm dev                      # boot Vite (5173) + Fastify (3000)
+pnpm dev                      # boot Vite (5173) + Fastify (3100)
 ```
 
 `pnpm dev` boots without a database — the home page and MCP stub run fine; the

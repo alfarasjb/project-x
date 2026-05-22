@@ -2,7 +2,7 @@ import Fastify from "fastify"
 import cors from "@fastify/cors"
 import { graphRoutes } from "./routes/graph.js"
 
-const PORT = Number(process.env.PORT ?? 3000)
+const PORT = Number(process.env.PORT ?? 3100)
 
 const app = Fastify({ logger: { level: "info" } })
 

@@ -2,7 +2,7 @@
 
 > Bidirectional architecture visualization tool. A ReactFlow canvas defines intended architecture; a ts-morph parser produces the actual graph from code; the divergence is surfaced as drift. An MCP server lets AI coding agents read the graph and propose changes.
 
-**Status:** Scaffold landed 2026-05-19. `pnpm install && pnpm dev` boots Vite (5173) + Fastify (3000). MCP stdio stub returns an empty `archlens://graph` resource. No business logic yet.
+**Status:** Scaffold landed 2026-05-19. `pnpm install && pnpm dev` boots Vite (5173) + Fastify (3100). MCP stdio stub returns an empty `archlens://graph` resource. No business logic yet.
 
 ## Canonical reference
 
@@ -31,7 +31,7 @@ The PRD is the source of truth. Fetch before scope/architecture decisions:
 
 | Script | What it does |
 |---|---|
-| `pnpm dev` | Boot Vite (5173) + Fastify (3000) concurrently |
+| `pnpm dev` | Boot Vite (5173) + Fastify (3100) concurrently |
 | `pnpm dev:web` | Vite only |
 | `pnpm dev:server` | Fastify only (tsx watch) |
 | `pnpm mcp` | Run the MCP stdio server (for `claude mcp add` or local connection) |
