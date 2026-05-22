@@ -117,9 +117,11 @@ function applyLayout(
 
 /**
  * Graph canvas. The detail filter and per-module collapse decide which nodes
- * are visible; each view is laid out fresh as a compact uniform grid, edges are
- * resolved onto the visible set, and clicking a node spotlights its connected
- * subgraph. Pane click or Escape clears the spotlight.
+ * are visible; each view is laid out fresh as a compact uniform grid.
+ *
+ * Edges are hidden by default — a resting canvas shows nodes only. Clicking a
+ * node reveals its direct (one-hop) edges and spotlights the connected
+ * subgraph; pane click or Escape clears the selection.
  *
  * Switching views re-layouts by design — the canvas does not preserve positions
  * across views; each view is its own space-conserving picture.
@@ -142,6 +144,13 @@ export function GraphCanvas({ graph }: { graph: Graph }) {
 		[baseNodes, boxes, collapsedIds]
 	)
 	const edges = useMemo(() => resolveEdges(graph, visible), [graph, visible])
+
+	// Edges are hidden until a node is selected — then only its direct (one-hop)
+	// connections render, keeping the resting canvas free of edge clutter.
+	const visibleEdges = useMemo(() => {
+		if (selectedId === null) return []
+		return edges.filter((edge) => edge.source === selectedId || edge.target === selectedId)
+	}, [edges, selectedId])
 
 	const spotlight = useMemo(
 		() => computeSpotlight(graph.nodes, edges, selectedId),
@@ -204,7 +213,7 @@ export function GraphCanvas({ graph }: { graph: Graph }) {
 							// layout; collapse keeps the key and re-packs in place.
 							key={filterLevel}
 							nodes={nodes}
-							edges={edges}
+							edges={visibleEdges}
 							onNodeClick={handleNodeClick}
 							onPaneClick={clearSelection}
 							nodeTypes={nodeTypes}
