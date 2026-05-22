@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm"
 import { GraphSchema, type Graph } from "@shared/schemas/graph"
+import type { Project } from "@shared/schemas/project"
 import { getDb } from "@server/db"
-import { projects, type Project } from "@server/db/schema/projects"
+import { projects } from "@server/db/schema/projects"
 import { parseProject } from "@server/parser"
 
 /**

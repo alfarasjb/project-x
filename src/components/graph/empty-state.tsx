@@ -1,11 +1,11 @@
 import { CrawlButton } from "@/components/graph/crawl-button"
 
 /**
- * Shown at `/graph` when the project has never been crawled — the stored graph
- * is empty. The graph only appears after an explicit crawl; we never crawl on
- * load, so this is the deliberate first-run state.
+ * Shown at `/projects/:id` when the project has never been crawled — its stored
+ * graph is empty. The graph only appears after an explicit crawl; we never
+ * crawl on load, so this is the deliberate first-run state.
  */
-export function GraphEmptyState() {
+export function GraphEmptyState({ projectId }: { projectId: string }) {
 	return (
 		<div className="flex h-screen w-full flex-col items-center justify-center gap-5 text-center">
 			<div className="max-w-sm space-y-1.5">
@@ -15,7 +15,7 @@ export function GraphEmptyState() {
 					graph. It persists — later visits load instantly from the database.
 				</p>
 			</div>
-			<CrawlButton />
+			<CrawlButton projectId={projectId} />
 		</div>
 	)
 }
