@@ -116,9 +116,10 @@
 
 /*
  * Graph spotlight — edge colours and the flowing-dash animation used when a
- * node is selected. The dash flows source → target, which is toward the
- * selected node for upstream edges and away from it for downstream edges.
- * Respects prefers-reduced-motion: the dashes fall back to a static stroke.
+ * node is selected. The dash flows target → source — the direction information
+ * moves: an imported module's exports stream into the files that depend on it,
+ * opposite the import edge's own direction. Respects prefers-reduced-motion:
+ * the dashes fall back to a static stroke.
  */
 :root {
 	--graph-edge-idle: oklch(0.7 0 0);
@@ -128,7 +129,7 @@
 
 @keyframes graph-edge-flow {
 	to {
-		stroke-dashoffset: -10;
+		stroke-dashoffset: 10;
 	}
 }
 

@@ -15,8 +15,6 @@ export interface ModuleNodeData {
 	description?: Description
 	/** True while the module's children are hidden. */
 	collapsed?: boolean
-	/** Expanded height — restored when the module is re-expanded. */
-	fullHeight?: number
 	/** Whether the module has visible children — false hides the collapse control. */
 	hasChildren?: boolean
 	/** Compact subtree summary shown in the header, e.g. "5 files · 8 edges". */
@@ -44,7 +42,7 @@ export function ModuleNode({ id, data }: NodeProps<ModuleNodeType>) {
 			)}
 		>
 			<SpotlightOverlay role={role} />
-			<Handle type="target" position={Position.Top} />
+			<Handle type="target" position={Position.Left} />
 			<div
 				className={cn(
 					"flex items-center gap-1.5 border-b border-inherit px-2.5 py-2",
@@ -68,7 +66,7 @@ export function ModuleNode({ id, data }: NodeProps<ModuleNodeType>) {
 						)}
 					</button>
 				)}
-				<span className="font-display text-xs font-semibold uppercase tracking-wide">
+				<span className="min-w-0 truncate font-display text-xs font-semibold uppercase tracking-wide">
 					{data.label}
 				</span>
 				{data.statsLabel && (
@@ -93,7 +91,7 @@ export function ModuleNode({ id, data }: NodeProps<ModuleNodeType>) {
 					{data.description.what}
 				</p>
 			)}
-			<Handle type="source" position={Position.Bottom} />
+			<Handle type="source" position={Position.Right} />
 		</div>
 	)
 }

@@ -34,7 +34,7 @@ export function FileNode({ id, data }: NodeProps<FileNodeType>) {
 			title={data.path}
 		>
 			<SpotlightOverlay role={role} />
-			<Handle type="target" position={Position.Top} />
+			<Handle type="target" position={Position.Left} />
 			<div className="flex items-center gap-2 border-b border-dashed border-inherit px-2.5 py-1.5">
 				<span className="truncate font-mono text-[11px] text-muted-foreground">
 					{data.label}
@@ -45,7 +45,7 @@ export function FileNode({ id, data }: NodeProps<FileNodeType>) {
 					</span>
 				)}
 			</div>
-			<Handle type="source" position={Position.Bottom} />
+			<Handle type="source" position={Position.Right} />
 		</div>
 	)
 }

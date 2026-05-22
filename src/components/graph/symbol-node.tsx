@@ -37,13 +37,13 @@ export function SymbolNode({ id, data }: NodeProps<SymbolNodeType>) {
 	return (
 		<div
 			className={cn(
-				"relative flex w-[230px] flex-col gap-0.5 rounded-md border bg-card px-2.5 py-1.5 shadow-sm transition-opacity duration-200",
+				"relative flex h-full w-full flex-col gap-0.5 overflow-hidden rounded-md border bg-card px-2.5 py-1.5 shadow-sm transition-opacity duration-200",
 				role === "dimmed" && "opacity-40"
 			)}
 			title={tooltip}
 		>
 			<SpotlightOverlay role={role} />
-			<Handle type="target" position={Position.Top} />
+			<Handle type="target" position={Position.Left} />
 			<div className="flex items-center gap-2">
 				<span
 					className={cn(
@@ -51,22 +51,22 @@ export function SymbolNode({ id, data }: NodeProps<SymbolNodeType>) {
 						KIND_DOT[data.kind] ?? DEFAULT_DOT
 					)}
 				/>
-				<span className="text-xs font-medium">{data.label}</span>
-				<span className="ml-auto font-mono text-[10px] text-muted-foreground">
+				<span className="truncate text-xs font-medium">{data.label}</span>
+				<span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
 					{data.kind}
 				</span>
 			</div>
 			{data.signature && (
-				<div className="font-mono text-[10px] leading-snug text-muted-foreground">
+				<div className="truncate font-mono text-[10px] leading-snug text-muted-foreground">
 					{formatSignature(data.signature)}
 				</div>
 			)}
 			{!data.signature && data.description && (
-				<div className="text-[10px] leading-snug text-muted-foreground">
+				<div className="truncate text-[10px] leading-snug text-muted-foreground">
 					{data.description.what}
 				</div>
 			)}
-			<Handle type="source" position={Position.Bottom} />
+			<Handle type="source" position={Position.Right} />
 		</div>
 	)
 }
