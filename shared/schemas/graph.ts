@@ -127,12 +127,16 @@ export type Description = z.infer<typeof DescriptionSchema>
 
 /**
  * Cheap per-node metrics the parser emits. Populated for file nodes by
- * the TS parser today (`lineCount`, `exportCount`); other node kinds may
- * leave it undefined. Audit rules read these to flag god files etc.
+ * the TS parser today (`lineCount`, `exportCount`, `contentHash`); other
+ * node kinds may leave it undefined. Audit rules read these to flag god
+ * files; the analyze phase uses `contentHash` to skip unchanged files
+ * (a hash-match against the previous crawl ⇒ no LLM call needed).
  */
 export const MetricsSchema = z.object({
 	lineCount: z.number().int().nonnegative().optional(),
-	exportCount: z.number().int().nonnegative().optional()
+	exportCount: z.number().int().nonnegative().optional(),
+	/** sha256 of the file contents, first 16 hex chars. File nodes only. */
+	contentHash: z.string().min(1).optional()
 })
 export type Metrics = z.infer<typeof MetricsSchema>
 
@@ -191,3 +195,18 @@ export const GraphSchema = z.object({
 export type Graph = z.infer<typeof GraphSchema>
 
 export const EMPTY_GRAPH: Graph = { nodes: [], edges: [] }
+
+/**
+ * Response from `POST /api/projects/:id/analyze`. Carries the updated graph
+ * (so the client can swap it into the cache without a follow-up GET) plus
+ * counters for the toast/log: how many nodes were classified this run, how
+ * many were skipped (content-hash match), and how many per-node failures we
+ * swallowed.
+ */
+export const AnalyzeResultSchema = z.object({
+	graph: GraphSchema,
+	analyzed: z.number().int().nonnegative(),
+	skipped: z.number().int().nonnegative(),
+	failed: z.number().int().nonnegative()
+})
+export type AnalyzeResult = z.infer<typeof AnalyzeResultSchema>

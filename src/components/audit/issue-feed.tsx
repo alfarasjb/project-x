@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { AlertOctagon, AlertTriangle, ChevronDown, ChevronRight, Info } from "lucide-react"
 import type { Issue, IssueSeverity } from "@shared/schemas/issue"
+import { AnalyzeButton } from "@/components/audit/analyze-button"
 import { issuesQueryOptions } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
@@ -19,8 +20,9 @@ export function IssueFeed({ projectId }: { projectId: string }) {
 	if (isLoading) {
 		return (
 			<section className="space-y-3">
-				<header>
+				<header className="flex items-start justify-between gap-3">
 					<h2 className="font-display text-sm font-semibold">Issues</h2>
+					<AnalyzeButton projectId={projectId} />
 				</header>
 				<p className="text-muted-foreground text-sm">Loading…</p>
 			</section>
@@ -30,8 +32,9 @@ export function IssueFeed({ projectId }: { projectId: string }) {
 	if (error) {
 		return (
 			<section className="space-y-3">
-				<header>
+				<header className="flex items-start justify-between gap-3">
 					<h2 className="font-display text-sm font-semibold">Issues</h2>
+					<AnalyzeButton projectId={projectId} />
 				</header>
 				<p className="text-destructive text-sm">{error.message}</p>
 			</section>
@@ -43,19 +46,22 @@ export function IssueFeed({ projectId }: { projectId: string }) {
 
 	return (
 		<section className="space-y-3">
-			<header className="flex items-baseline justify-between gap-3">
-				<h2 className="font-display text-sm font-semibold">
-					Issues <span className="text-muted-foreground font-normal">({sorted.length})</span>
-				</h2>
-				{sorted.length > 0 && (
-					<div className="text-muted-foreground flex items-center gap-3 text-[11px]">
-						{counts.critical > 0 && (
-							<span className="text-destructive font-medium">{counts.critical} critical</span>
-						)}
-						{counts.warning > 0 && <span>{counts.warning} warning</span>}
-						{counts.info > 0 && <span>{counts.info} info</span>}
-					</div>
-				)}
+			<header className="flex items-start justify-between gap-3">
+				<div className="flex items-baseline gap-3">
+					<h2 className="font-display text-sm font-semibold">
+						Issues <span className="text-muted-foreground font-normal">({sorted.length})</span>
+					</h2>
+					{sorted.length > 0 && (
+						<div className="text-muted-foreground flex items-center gap-3 text-[11px]">
+							{counts.critical > 0 && (
+								<span className="text-destructive font-medium">{counts.critical} critical</span>
+							)}
+							{counts.warning > 0 && <span>{counts.warning} warning</span>}
+							{counts.info > 0 && <span>{counts.info} info</span>}
+						</div>
+					)}
+				</div>
+				<AnalyzeButton projectId={projectId} />
 			</header>
 
 			{sorted.length === 0 ? (

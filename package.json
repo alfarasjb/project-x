@@ -34,6 +34,7 @@
 		]
 	},
 	"dependencies": {
+		"@anthropic-ai/sdk": "^0.98.0",
 		"@better-auth/infra": "^0.2.8",
 		"@fastify/cors": "^11.2.0",
 		"@fastify/websocket": "^11.2.0",
