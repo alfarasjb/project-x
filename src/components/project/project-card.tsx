@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
  * Archive action; archived projects are dimmed, non-linking, and offer Restore.
  * Either action invalidates the `["projects", …]` lists so both refresh.
  */
-export function ProjectCard({ project }: { project: Project }) {
+export function ProjectCard({ project, orgSlug }: { project: Project; orgSlug: string }) {
 	const queryClient = useQueryClient()
 	const isArchived = project.archivedAt !== null
 
@@ -60,8 +60,8 @@ export function ProjectCard({ project }: { project: Project }) {
 			</div>
 			{!isArchived && (
 				<Link
-					to="/projects/$projectId"
-					params={{ projectId: project.id }}
+					to="/$orgSlug/projects/$projectId"
+					params={{ orgSlug, projectId: project.id }}
 					className="text-primary mt-3 inline-block text-xs font-medium underline-offset-4 hover:underline"
 				>
 					Open →

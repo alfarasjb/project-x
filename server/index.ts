@@ -1,6 +1,7 @@
 import { env } from "@server/env"
 import Fastify from "fastify"
 import cors from "@fastify/cors"
+import { authRoutes } from "@server/routes/auth"
 import { projectRoutes } from "@server/routes/projects"
 import { graphRoutes } from "@server/routes/graph"
 
@@ -8,7 +9,7 @@ const PORT = env.PORT
 
 const app = Fastify({ logger: { level: "info" } })
 
-await app.register(cors, { origin: "http://localhost:5173", credentials: true })
+await app.register(cors, { origin: env.APP_URL, credentials: true })
 
 app.get("/api/health", () => ({
 	status: "ok" as const,
@@ -16,6 +17,9 @@ app.get("/api/health", () => ({
 	uptime: Math.round(process.uptime())
 }))
 
+// Auth routes register FIRST — domain routes use requireAuth() against the
+// session better-auth populates, so the handler must be mounted before they run.
+await app.register(authRoutes)
 await app.register(projectRoutes)
 await app.register(graphRoutes)
 

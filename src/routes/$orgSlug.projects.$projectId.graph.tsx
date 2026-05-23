@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { GraphCanvas } from "@/components/graph/graph-canvas"
 import { GraphGuard } from "@/components/project/graph-guard"
 
-export const Route = createFileRoute("/projects/$projectId/graph")({
+export const Route = createFileRoute("/$orgSlug/projects/$projectId/graph")({
 	component: GraphRoute
 })
 

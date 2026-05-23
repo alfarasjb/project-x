@@ -2,14 +2,14 @@ import { createFileRoute } from "@tanstack/react-router"
 import { GraphGuard } from "@/components/project/graph-guard"
 import { BlueprintHealth } from "@/components/project/blueprint-health"
 
-export const Route = createFileRoute("/projects/$projectId/")({
+export const Route = createFileRoute("/$orgSlug/projects/$projectId/")({
 	component: DashboardRoute
 })
 
 /**
  * The project's main view — blueprint health. The calm landing; the graph
- * canvas lives behind its own tab. Richer panels (change history, audit,
- * drift) land here once the infrastructure they need exists.
+ * canvas lives behind its own tab. The Issue Feed lands here once detection
+ * infrastructure (graph traversal + crawl-time analysis + AI tier) exists.
  */
 function DashboardRoute() {
 	const { projectId } = Route.useParams()

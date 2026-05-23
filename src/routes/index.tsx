@@ -1,87 +1,20 @@
-import { useState } from "react"
-import { createFileRoute } from "@tanstack/react-router"
-import { useQuery } from "@tanstack/react-query"
-import { ChevronDown, ChevronRight } from "lucide-react"
-import { projectsQueryOptions } from "@/lib/queries"
-import { NewProjectForm } from "@/components/project/new-project-form"
-import { ProjectCard } from "@/components/project/project-card"
+import { createFileRoute, redirect } from "@tanstack/react-router"
+import { orgsQueryOptions, sessionQueryOptions } from "@/lib/auth-queries"
 
 export const Route = createFileRoute("/")({
-	component: HomePage,
-	loader: ({ context }) => {
-		void context.queryClient.prefetchQuery(projectsQueryOptions())
+	/**
+	 * The bare `/` URL is never rendered for a signed-in user — we always
+	 * redirect into their active org's projects view, so the URL bar reflects
+	 * which workspace they're in. Root beforeLoad has already handled the
+	 * no-session and no-orgs cases by the time we get here.
+	 */
+	beforeLoad: async ({ context }) => {
+		const session = await context.queryClient.ensureQueryData(sessionQueryOptions)
+		if (!session) throw redirect({ to: "/signin" })
+		const orgs = await context.queryClient.ensureQueryData(orgsQueryOptions)
+		if (orgs.length === 0) throw redirect({ to: "/onboarding" })
+		const active = orgs.find((org) => org.id === session.session.activeOrganizationId) ?? orgs[0]
+		if (!active) throw redirect({ to: "/onboarding" })
+		throw redirect({ to: "/$orgSlug/projects", params: { orgSlug: active.slug } })
 	}
 })
-
-function HomePage() {
-	const { data: projects, error, isLoading } = useQuery(projectsQueryOptions())
-	const [showArchived, setShowArchived] = useState(false)
-	const archived = useQuery({
-		...projectsQueryOptions({ archived: true }),
-		enabled: showArchived
-	})
-
-	return (
-		<div className="h-full overflow-y-auto">
-			<div className="mx-auto w-full max-w-3xl px-6 py-12">
-				<header>
-					<h1 className="font-display text-3xl font-bold tracking-tight">Projects</h1>
-					<p className="text-muted-foreground mt-1 text-sm">
-						Pick a repo to map, or add a new one.
-					</p>
-				</header>
-
-				<section className="mt-8 space-y-3">
-					<h2 className="text-sm font-semibold">New project</h2>
-					<NewProjectForm />
-				</section>
-
-				<section className="mt-10 space-y-3">
-					<h2 className="text-sm font-semibold">Projects</h2>
-					{isLoading && <p className="text-muted-foreground text-sm">loading…</p>}
-					{error && <p className="text-destructive text-sm">{error.message}</p>}
-					{projects && projects.length === 0 && (
-						<p className="text-muted-foreground text-sm">No projects yet — add one above.</p>
-					)}
-					{projects && projects.length > 0 && (
-						<div className="grid gap-3 sm:grid-cols-2">
-							{projects.map((project) => (
-								<ProjectCard key={project.id} project={project} />
-							))}
-						</div>
-					)}
-				</section>
-
-				<section className="mt-8">
-					<button
-						type="button"
-						onClick={() => setShowArchived((open) => !open)}
-						className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
-					>
-						{showArchived ? (
-							<ChevronDown className="h-3.5 w-3.5" />
-						) : (
-							<ChevronRight className="h-3.5 w-3.5" />
-						)}
-						Archived
-					</button>
-					{showArchived && (
-						<div className="mt-3">
-							{archived.isLoading && <p className="text-muted-foreground text-xs">loading…</p>}
-							{archived.data && archived.data.length === 0 && (
-								<p className="text-muted-foreground text-xs">No archived projects.</p>
-							)}
-							{archived.data && archived.data.length > 0 && (
-								<div className="grid gap-3 sm:grid-cols-2">
-									{archived.data.map((project) => (
-										<ProjectCard key={project.id} project={project} />
-									))}
-								</div>
-							)}
-						</div>
-					)}
-				</section>
-			</div>
-		</div>
-	)
-}
