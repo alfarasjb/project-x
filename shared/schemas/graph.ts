@@ -126,13 +126,59 @@ export const DescriptionSchema = z.object({
 export type Description = z.infer<typeof DescriptionSchema>
 
 /**
+ * Categories of intra-file concerns the AI analyze pass can flag. Closed
+ * enum — we own the taxonomy so the UI can group/filter without parsing
+ * free-form strings, and so prompt drift can't silently introduce new
+ * buckets. Add a category here AND in the analyze system prompt; don't
+ * add only one.
+ *
+ * - `mixed-responsibilities` — file does multiple unrelated things
+ * - `misplaced-content`      — content doesn't match the classification
+ *                              (e.g. DB call in a route handler)
+ * - `hardcoded-domain-values` — magic strings/numbers that should be
+ *                              constants or config (role names, plan ids)
+ * - `long-inline-logic`      — a handler/function too long to keep inline;
+ *                              should be extracted to a domain function
+ * - `dead-or-stub-code`      — TODO-heavy, commented-out blocks,
+ *                              placeholder exports
+ * - `unclear-naming`         — names that actively mislead (`utils.ts`
+ *                              full of DB queries, "helper" load-bearing)
+ * - `other`                  — escape hatch; concerns that don't fit
+ */
+export const ConcernCategorySchema = z.enum([
+	"mixed-responsibilities",
+	"misplaced-content",
+	"hardcoded-domain-values",
+	"long-inline-logic",
+	"dead-or-stub-code",
+	"unclear-naming",
+	"other"
+])
+export type ConcernCategory = z.infer<typeof ConcernCategorySchema>
+
+/**
+ * A single concern the AI noticed in a file. The category drives UI
+ * grouping/filtering; the message is the human-readable one-liner shown
+ * in the issue card.
+ */
+export const ConcernSchema = z.object({
+	category: ConcernCategorySchema,
+	message: z.string().min(1).max(500)
+})
+export type Concern = z.infer<typeof ConcernSchema>
+
+/**
  * Cheap per-node metrics the parser emits. Populated for file nodes by
- * the TS parser today (`lineCount`, `exportCount`); other node kinds may
- * leave it undefined. Audit rules read these to flag god files etc.
+ * the TS parser today (`lineCount`, `exportCount`, `contentHash`); other
+ * node kinds may leave it undefined. Audit rules read these to flag god
+ * files; the analyze phase uses `contentHash` to skip unchanged files
+ * (a hash-match against the previous crawl ⇒ no LLM call needed).
  */
 export const MetricsSchema = z.object({
 	lineCount: z.number().int().nonnegative().optional(),
-	exportCount: z.number().int().nonnegative().optional()
+	exportCount: z.number().int().nonnegative().optional(),
+	/** sha256 of the file contents, first 16 hex chars. File nodes only. */
+	contentHash: z.string().min(1).optional()
 })
 export type Metrics = z.infer<typeof MetricsSchema>
 
@@ -161,6 +207,23 @@ export const GraphNodeSchema = z.object({
 	signature: SignatureSchema.optional(),
 	/** Docstring / summary. AI-inferred or authored. */
 	description: DescriptionSchema.optional(),
+	/**
+	 * The `metrics.contentHash` value at the moment the AI analyze pass last
+	 * wrote this node's `classification` + `description`. The analyze step
+	 * skips a node when its current `contentHash` still matches this — that's
+	 * the "don't re-analyze unchanged files" dedup. Preserved across crawls
+	 * by `mergePreservedFields`; cleared by `setNodeClassification`/manual
+	 * description writes because those provenance paths don't go through AI.
+	 */
+	analyzedHash: z.string().min(1).optional(),
+	/**
+	 * Concerns the AI analyze pass flagged while reading this file's
+	 * content. Empty (or absent) means the file looked clean. The audit's
+	 * `aiReview` rule walks these to emit `ai-review` issues — count
+	 * determines severity (1→info, 2→warning, 3+→critical), Claude itself
+	 * does not assign severity.
+	 */
+	concerns: z.array(ConcernSchema).optional(),
 	/**
 	 * Canvas position, relative to parent if nested. Set by the user (intent
 	 * graph) or by a layout pass (parsed graphs). Optional — the parser emits
@@ -191,3 +254,18 @@ export const GraphSchema = z.object({
 export type Graph = z.infer<typeof GraphSchema>
 
 export const EMPTY_GRAPH: Graph = { nodes: [], edges: [] }
+
+/**
+ * Response from `POST /api/projects/:id/analyze`. Carries the updated graph
+ * (so the client can swap it into the cache without a follow-up GET) plus
+ * counters for the toast/log: how many nodes were classified this run, how
+ * many were skipped (content-hash match), and how many per-node failures we
+ * swallowed.
+ */
+export const AnalyzeResultSchema = z.object({
+	graph: GraphSchema,
+	analyzed: z.number().int().nonnegative(),
+	skipped: z.number().int().nonnegative(),
+	failed: z.number().int().nonnegative()
+})
+export type AnalyzeResult = z.infer<typeof AnalyzeResultSchema>

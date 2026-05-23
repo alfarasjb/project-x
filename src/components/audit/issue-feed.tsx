@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { AlertOctagon, AlertTriangle, ChevronDown, ChevronRight, Info } from "lucide-react"
 import type { Issue, IssueSeverity } from "@shared/schemas/issue"
+import { AnalyzeButton } from "@/components/audit/analyze-button"
 import { issuesQueryOptions } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
@@ -19,8 +20,9 @@ export function IssueFeed({ projectId }: { projectId: string }) {
 	if (isLoading) {
 		return (
 			<section className="space-y-3">
-				<header>
+				<header className="flex items-start justify-between gap-3">
 					<h2 className="font-display text-sm font-semibold">Issues</h2>
+					<AnalyzeButton projectId={projectId} />
 				</header>
 				<p className="text-muted-foreground text-sm">Loading…</p>
 			</section>
@@ -30,8 +32,9 @@ export function IssueFeed({ projectId }: { projectId: string }) {
 	if (error) {
 		return (
 			<section className="space-y-3">
-				<header>
+				<header className="flex items-start justify-between gap-3">
 					<h2 className="font-display text-sm font-semibold">Issues</h2>
+					<AnalyzeButton projectId={projectId} />
 				</header>
 				<p className="text-destructive text-sm">{error.message}</p>
 			</section>
@@ -43,19 +46,22 @@ export function IssueFeed({ projectId }: { projectId: string }) {
 
 	return (
 		<section className="space-y-3">
-			<header className="flex items-baseline justify-between gap-3">
-				<h2 className="font-display text-sm font-semibold">
-					Issues <span className="text-muted-foreground font-normal">({sorted.length})</span>
-				</h2>
-				{sorted.length > 0 && (
-					<div className="text-muted-foreground flex items-center gap-3 text-[11px]">
-						{counts.critical > 0 && (
-							<span className="text-destructive font-medium">{counts.critical} critical</span>
-						)}
-						{counts.warning > 0 && <span>{counts.warning} warning</span>}
-						{counts.info > 0 && <span>{counts.info} info</span>}
-					</div>
-				)}
+			<header className="flex items-start justify-between gap-3">
+				<div className="flex items-baseline gap-3">
+					<h2 className="font-display text-sm font-semibold">
+						Issues <span className="text-muted-foreground font-normal">({sorted.length})</span>
+					</h2>
+					{sorted.length > 0 && (
+						<div className="text-muted-foreground flex items-center gap-3 text-[11px]">
+							{counts.critical > 0 && (
+								<span className="text-destructive font-medium">{counts.critical} critical</span>
+							)}
+							{counts.warning > 0 && <span>{counts.warning} warning</span>}
+							{counts.info > 0 && <span>{counts.info} info</span>}
+						</div>
+					)}
+				</div>
+				<AnalyzeButton projectId={projectId} />
 			</header>
 
 			{sorted.length === 0 ? (
@@ -102,6 +108,9 @@ function IssueCard({ issue }: { issue: Issue }) {
 					<p className="mt-1 truncate text-sm">{issue.title}</p>
 					<p className="text-muted-foreground mt-0.5 text-[11px]">
 						{issue.affected.length} affected file{issue.affected.length === 1 ? "" : "s"}
+						{issue.blastRadius
+							? ` · ${issue.blastRadius.upstream} dependent${issue.blastRadius.upstream === 1 ? "" : "s"}`
+							: ""}
 					</p>
 				</div>
 				{open ? (
@@ -113,7 +122,23 @@ function IssueCard({ issue }: { issue: Issue }) {
 
 			{open && (
 				<div className="space-y-3 border-t px-3 py-3">
-					<p className="text-sm leading-snug">{issue.description}</p>
+					{issue.concerns && issue.concerns.length > 0 ? (
+						<ul className="space-y-2">
+							{issue.concerns.map((concern, idx) => (
+								<li
+									key={`${concern.category}:${idx}`}
+									className="bg-muted/40 rounded-md border border-border/40 p-2.5"
+								>
+									<span className="bg-muted text-muted-foreground inline-block rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide">
+										{concern.category}
+									</span>
+									<p className="mt-1.5 text-sm leading-snug">{concern.message}</p>
+								</li>
+							))}
+						</ul>
+					) : (
+						<p className="text-sm leading-snug whitespace-pre-line">{issue.description}</p>
+					)}
 					{issue.affected.length > 0 && (
 						<div className="space-y-1">
 							<p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide">
@@ -126,6 +151,18 @@ function IssueCard({ issue }: { issue: Issue }) {
 									</li>
 								))}
 							</ul>
+						</div>
+					)}
+					{issue.blastRadius && (
+						<div className="space-y-1">
+							<p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide">
+								Blast radius
+							</p>
+							<div className="text-muted-foreground flex items-center gap-3 text-[11px]">
+								<span>{issue.blastRadius.upstream} upstream</span>
+								<span>{issue.blastRadius.downstream} downstream</span>
+								<span>{issue.blastRadius.modulesTouched} modules touched</span>
+							</div>
 						</div>
 					)}
 					<p className="text-muted-foreground text-[10px]">

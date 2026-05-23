@@ -41,7 +41,15 @@ const envSchema = z.object({
 	 * Optional: the MCP server falls back to matching the cwd, then to the sole
 	 * project. Unused by the Fastify server.
 	 */
-	PROJECT_X_PROJECT: z.string().min(1).optional()
+	PROJECT_X_PROJECT: z.string().min(1).optional(),
+	/**
+	 * Anthropic API key — required only for the user-triggered Analyze action,
+	 * which classifies + describes every file/module via Claude. Optional at
+	 * boot so contributors without a key can still run the rest of the app
+	 * (parse, crawl, heuristic audit). The /analyze route returns a clear 4xx
+	 * when this is unset; nothing else cares.
+	 */
+	ANTHROPIC_API_KEY: z.string().min(1).optional()
 })
 
 const parsed = envSchema.safeParse(process.env)

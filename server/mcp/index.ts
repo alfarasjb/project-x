@@ -7,9 +7,11 @@ import {
 	type Description,
 	type GraphNode
 } from "@shared/schemas/graph"
+import { IssueSeveritySchema, type Issue } from "@shared/schemas/issue"
 import {
 	getNodeDetail,
 	getProjectGraph,
+	getProjectIssues,
 	setNodeClassification,
 	setNodeDescription
 } from "@server/domain/graph"
@@ -41,6 +43,12 @@ function toolError(error: unknown): { isError: true; content: { type: "text"; te
 /** A node trimmed to the fields worth showing in a list or an edge reference. */
 function briefNode(node: GraphNode): { id: string; kind: string; label: string } {
 	return { id: node.id, kind: node.kind, label: node.label }
+}
+
+/** Sort comparator: critical → warning → info. Mirrors the dashboard Issue Feed. */
+const SEVERITY_RANK = { critical: 0, warning: 1, info: 2 } as const
+function bySeverity(a: Issue, b: Issue): number {
+	return SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]
 }
 
 async function main(): Promise<void> {
@@ -344,6 +352,126 @@ Returns JSON: { ok: true, node: { id, path, classification } }. Errors if the no
 						}
 					]
 				}
+			} catch (error) {
+				return toolError(error)
+			}
+		}
+	)
+
+	// --- Tool: list issues --------------------------------------------------
+	server.registerTool(
+		"projectx_list_issues",
+		{
+			title: "List audit issues",
+			description: `List architecture audit issues for "${project.name}" — findings from the heuristic rules (circular deps, god files, bidirectional deps) and from AI Review (per-file concerns Claude flagged during analyze).
+
+Use this to take inventory of what's broken, or to scope a refactor pass. To attack the highest-priority items, filter with severity=["critical"] (or include "warning" too). To focus on AI-flagged content problems, filter with category="ai-review". To inspect one issue's full detail (including structured concerns for ai-review), call projectx_get_issue with its id.
+
+Args:
+  - severity (array of strings, optional): restrict to one or more severities — "critical" | "warning" | "info". Omit for all.
+  - category (string, optional): restrict to one category, e.g. "ai-review" | "god-file" | "circular-dep" | "bidirectional-deps". Omit for all.
+  - limit (number): max issues to return, 1-200 (default 100).
+  - offset (number): issues to skip, for pagination (default 0).
+
+Returns JSON: { total, count, offset, has_more, issues: [{ id, severity, category, title, affected, firstDetected, concernCount }] }. The "id" can be passed to projectx_get_issue. "concernCount" is the number of structured concerns on the issue — only populated for ai-review issues, useful for ranking.`,
+			inputSchema: {
+				severity: z
+					.array(IssueSeveritySchema)
+					.optional()
+					.describe('Severities to include, e.g. ["critical", "warning"]. Omit for all.'),
+				category: z
+					.string()
+					.min(1)
+					.optional()
+					.describe('Restrict to one category, e.g. "ai-review" or "god-file". Omit for all.'),
+				limit: z.number().int().min(1).max(200).default(100).describe("Max issues to return."),
+				offset: z.number().int().min(0).default(0).describe("Issues to skip, for pagination.")
+			},
+			annotations: {
+				readOnlyHint: true,
+				destructiveHint: false,
+				idempotentHint: true,
+				openWorldHint: false
+			}
+		},
+		async ({ severity, category, limit, offset }) => {
+			try {
+				const all = await getProjectIssues(project.id)
+				const filtered = all
+					.filter((issue) => (severity ? severity.includes(issue.severity) : true))
+					.filter((issue) => (category ? issue.category === category : true))
+					.sort(bySeverity)
+				const page = filtered.slice(offset, offset + limit)
+				const result = {
+					total: filtered.length,
+					count: page.length,
+					offset,
+					has_more: offset + page.length < filtered.length,
+					issues: page.map((issue) => ({
+						id: issue.id,
+						severity: issue.severity,
+						category: issue.category,
+						title: issue.title,
+						affected: issue.affected,
+						firstDetected: issue.firstDetected,
+						concernCount: issue.concerns?.length ?? 0
+					}))
+				}
+				return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
+			} catch (error) {
+				return toolError(error)
+			}
+		}
+	)
+
+	// --- Tool: get issue ----------------------------------------------------
+	server.registerTool(
+		"projectx_get_issue",
+		{
+			title: "Get issue detail",
+			description: `Get full detail for one audit issue in "${project.name}": the title, description, all affected node paths, and (for ai-review issues) the structured per-concern list with category + message.
+
+Use this after projectx_list_issues to pull the body of an issue you intend to fix. The "affected" paths are the files to read and modify. For an ai-review issue, the "concerns" array tells you exactly WHAT the AI flagged, by category — work through them as a checklist.
+
+Args:
+  - issue_id (string): the issue id, e.g. "ai-review:src/routes/onboarding.tsx" or "god-file:server/db/seed.ts".
+
+Returns JSON: {
+  id, category, severity, title, description, affected,
+  firstDetected,
+  concerns: [{ category, message }] | null   // populated for ai-review issues
+}. Errors if no issue matches the id.`,
+			inputSchema: {
+				issue_id: z
+					.string()
+					.min(1)
+					.describe('The issue id, e.g. "ai-review:src/routes/onboarding.tsx".')
+			},
+			annotations: {
+				readOnlyHint: true,
+				destructiveHint: false,
+				idempotentHint: true,
+				openWorldHint: false
+			}
+		},
+		async ({ issue_id }) => {
+			try {
+				const all = await getProjectIssues(project.id)
+				const issue = all.find((candidate) => candidate.id === issue_id)
+				if (!issue) {
+					return toolError(new Error(`No issue with id "${issue_id}".`))
+				}
+				const result = {
+					id: issue.id,
+					category: issue.category,
+					severity: issue.severity,
+					title: issue.title,
+					description: issue.description,
+					affected: issue.affected,
+					firstDetected: issue.firstDetected,
+					concerns: issue.concerns ?? null
+				}
+				return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
 			} catch (error) {
 				return toolError(error)
 			}

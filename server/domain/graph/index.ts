@@ -11,6 +11,7 @@ import type { Project } from "@shared/schemas/project"
 import { getDb } from "@server/db"
 import { projects } from "@server/db/schema/projects"
 import { parseProject } from "@server/parser"
+import { analyzeGraph } from "@server/audit/analyze"
 import { runAudit, mergeIssueHistory } from "@server/audit/run"
 import { AppError } from "@server/utils/errors"
 
@@ -101,7 +102,9 @@ function mergePreservedFields(fresh: Graph, previous: Graph): Graph {
 			return {
 				...node,
 				...(prev.description !== undefined ? { description: prev.description } : {}),
-				...(prev.classification !== undefined ? { classification: prev.classification } : {})
+				...(prev.classification !== undefined ? { classification: prev.classification } : {}),
+				...(prev.analyzedHash !== undefined ? { analyzedHash: prev.analyzedHash } : {}),
+				...(prev.concerns !== undefined ? { concerns: prev.concerns } : {})
 			}
 		})
 	}
@@ -118,6 +121,10 @@ function mergePreservedFields(fresh: Graph, previous: Graph): Graph {
  * nodes by path. The audit's `firstDetected` timestamps are similarly
  * preserved per-issue id, so "this circular dependency has existed since
  * the 2026-05-15 crawl" survives the next crawl.
+ *
+ * Crawl is deterministic and free — it never calls an LLM. The AI enrichment
+ * (classification + description) is the separate, user-triggered Analyze
+ * action; see `analyzeProject`.
  */
 export async function crawlProject(project: Project): Promise<Graph> {
 	const fresh = await parseProject(project.rootPath)
@@ -128,6 +135,38 @@ export async function crawlProject(project: Project): Promise<Graph> {
 	await saveActualGraph(project.id, merged)
 	await saveProjectIssues(project.id, issues)
 	return merged
+}
+
+/**
+ * Run the AI enrichment pass over a project's stored graph: classify and
+ * describe every file/module that doesn't already have both. Re-runs the
+ * heuristic audit afterwards (today the rules don't read classifications,
+ * but the next audit PR will — running it now keeps the contract simple:
+ * Analyze always leaves the issues consistent with the graph).
+ *
+ * Separate from crawl because it costs money (per-token API calls) and
+ * requires `ANTHROPIC_API_KEY`. The route handler maps a missing key to a
+ * 4xx; per-node failures inside the pass are logged and the rest of the
+ * graph still saves, so partial-analyze is a recoverable state.
+ */
+export async function analyzeProject(
+	project: Project,
+	options?: { force?: boolean }
+): Promise<{ graph: Graph; analyzed: number; skipped: number; failed: number }> {
+	const stored = await getProjectGraph(project.id)
+	const current = stored?.actual ?? null
+	if (!current || current.nodes.length === 0) {
+		throw new AppError(409, `Project "${project.slug}" has no graph — crawl it first.`)
+	}
+	const result = await analyzeGraph(current, project.rootPath, options)
+	const previousIssues = await getProjectIssues(project.id)
+	const issues = mergeIssueHistory(runAudit(result.graph), previousIssues)
+	await saveActualGraph(project.id, result.graph)
+	await saveProjectIssues(project.id, issues)
+	console.warn(
+		`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}${options?.force ? " (forced)" : ""}`
+	)
+	return result
 }
 
 /**
