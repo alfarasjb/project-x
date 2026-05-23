@@ -173,14 +173,19 @@ export async function parseTypeScript(rootPath: string): Promise<Graph> {
 	for (const sf of sourceFiles) {
 		const filePath = relOf(sf)
 		const dir = posix.dirname(filePath)
+		const primitives = primitivesOf(sf, filePath)
 		fileNodes.push({
 			id: filePath,
 			path: filePath,
 			kind: "file",
 			label: posix.basename(filePath),
-			parentId: dir === "." ? null : dir
+			parentId: dir === "." ? null : dir,
+			metrics: {
+				lineCount: sf.getEndLineNumber(),
+				exportCount: primitives.length
+			}
 		})
-		primitiveNodes.push(...primitivesOf(sf, filePath))
+		primitiveNodes.push(...primitives)
 
 		// Register the directory and every ancestor as a module.
 		let d = dir

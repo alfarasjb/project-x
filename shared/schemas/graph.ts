@@ -28,6 +28,27 @@ export const NodeLayerSchema = z.enum([
 ])
 export type NodeLayer = z.infer<typeof NodeLayerSchema>
 
+/**
+ * Audit-derived role for a node. Distinct from `layer` (intent) — this is
+ * what the node *is* in practice, inferred by examining the code.
+ *
+ * Populated by the AI classification pipeline (MCP-driven for now;
+ * server-side AI later). Optional: nodes with no classification yet are
+ * treated as "unclassified" and surfaced for the next pass. Symbols
+ * inherit from their parent file; only files + modules carry their own.
+ */
+export const NodeClassificationSchema = z.enum([
+	"business-logic",
+	"routing",
+	"utility",
+	"data-access",
+	"ui-component",
+	"config",
+	"type-definition",
+	"unknown"
+])
+export type NodeClassification = z.infer<typeof NodeClassificationSchema>
+
 /** Recommended `kind` values — NOT exhaustive. `kind` is an open label. */
 export const KNOWN_NODE_KINDS = [
 	"module",
@@ -104,6 +125,17 @@ export const DescriptionSchema = z.object({
 })
 export type Description = z.infer<typeof DescriptionSchema>
 
+/**
+ * Cheap per-node metrics the parser emits. Populated for file nodes by
+ * the TS parser today (`lineCount`, `exportCount`); other node kinds may
+ * leave it undefined. Audit rules read these to flag god files etc.
+ */
+export const MetricsSchema = z.object({
+	lineCount: z.number().int().nonnegative().optional(),
+	exportCount: z.number().int().nonnegative().optional()
+})
+export type Metrics = z.infer<typeof MetricsSchema>
+
 export const GraphNodeSchema = z.object({
 	/** Stable unique id. Edges reference this. */
 	id: z.string().min(1),
@@ -117,6 +149,14 @@ export const GraphNodeSchema = z.object({
 	parentId: z.string().min(1).nullable(),
 	/** Architectural tier — modules carry it; symbols usually omit it. */
 	layer: NodeLayerSchema.optional(),
+	/**
+	 * Audit-derived role (business-logic / routing / data-access / …).
+	 * Populated by the classification pass; symbols inherit from their
+	 * parent file, so usually only file/module nodes set it explicitly.
+	 */
+	classification: NodeClassificationSchema.optional(),
+	/** Cheap parser-emitted metrics (line count, export count). File nodes only. */
+	metrics: MetricsSchema.optional(),
 	/** Signature — function/method nodes only. */
 	signature: SignatureSchema.optional(),
 	/** Docstring / summary. AI-inferred or authored. */
