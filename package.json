@@ -20,6 +20,7 @@
 		"format": "prettier --write .",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
+		"db:seed": "tsx --tsconfig tsconfig.server.json server/db/seed.ts",
 		"db:studio": "drizzle-kit studio",
 		"prepare": "husky"
 	},
@@ -33,12 +34,14 @@
 		]
 	},
 	"dependencies": {
+		"@better-auth/infra": "^0.2.8",
 		"@fastify/cors": "^11.2.0",
 		"@fastify/websocket": "^11.2.0",
 		"@modelcontextprotocol/sdk": "^1.29.0",
 		"@tanstack/react-query": "^5.100.11",
 		"@tanstack/react-router": "^1.170.4",
 		"@xyflow/react": "^12.10.2",
+		"better-auth": "^1.6.11",
 		"chokidar": "^5.0.0",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",

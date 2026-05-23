@@ -9,7 +9,9 @@ import { z } from "zod"
  */
 export const ProjectSchema = z.object({
 	id: z.uuid(),
-	/** URL-friendly identifier, derived from `name` on creation. */
+	/** Owning organization — populated from the session, never client-supplied. */
+	organizationId: z.string().min(1),
+	/** URL-friendly identifier, derived from `name` on creation. Unique per-org. */
 	slug: z.string().min(1),
 	/** Display name. */
 	name: z.string().min(1),

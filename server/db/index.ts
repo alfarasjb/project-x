@@ -2,9 +2,29 @@ import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import { env } from "@server/env"
 import { projects } from "@server/db/schema/projects"
+import {
+	account,
+	invitation,
+	member,
+	organization,
+	session,
+	user,
+	verification
+} from "@server/db/schema/auth"
 
 // Drizzle's schema object — list every table here (no barrel re-export).
-const schema = { projects }
+// Auth tables (user/session/account/verification + org/member/invitation) live
+// in `public`; domain tables live in `projectx`. Both share one connection.
+const schema = {
+	projects,
+	user,
+	session,
+	account,
+	verification,
+	organization,
+	member,
+	invitation
+}
 
 export type Db = ReturnType<typeof drizzle<typeof schema>>
 

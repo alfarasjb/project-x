@@ -1,11 +1,17 @@
 import { resolve } from "node:path"
 import type { Project } from "@shared/schemas/project"
 import { env } from "@server/env"
-import { getProject, getProjectBySlug, listProjects } from "@server/domain/project"
+import { findAnyProjectBySlug, getProject, listAllProjects } from "@server/domain/project"
 
 /**
  * Resolve the single project this MCP server serves. The server binds to one
  * project for the whole session, so no tool needs a project argument.
+ *
+ * MCP runs outside any HTTP session — it has no authenticated user or active
+ * org — so it deliberately uses the unscoped `listAllProjects` /
+ * `findAnyProjectBySlug` helpers. Slugs are unique per-org, so a slug hint
+ * matches the first project that owns it; pass a uuid in `PROJECT_X_PROJECT`
+ * to disambiguate when two orgs share a slug.
  *
  * Resolution order:
  *   1. `PROJECT_X_PROJECT` env var — a project id (uuid) or slug.
@@ -20,12 +26,12 @@ export async function resolveBoundProject(): Promise<Project> {
 	if (hint) {
 		const byId = await getProject(hint)
 		if (byId) return byId
-		const bySlug = await getProjectBySlug(hint)
+		const bySlug = await findAnyProjectBySlug(hint)
 		if (bySlug) return bySlug
 		throw new Error(`PROJECT_X_PROJECT="${hint}" matches no project (tried as id and slug).`)
 	}
 
-	const projects = await listProjects()
+	const projects = await listAllProjects()
 
 	const cwd = resolve(process.cwd())
 	const byCwd = projects.find((project) => resolve(project.rootPath) === cwd)
