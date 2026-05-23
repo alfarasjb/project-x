@@ -40,7 +40,8 @@ function OnboardingPage() {
 		event.preventDefault()
 		setError(null)
 		setPending(true)
-		const result = await authClient.organization.create({ name: name.trim(), slug: slug.trim() })
+		const newSlug = slug.trim()
+		const result = await authClient.organization.create({ name: name.trim(), slug: newSlug })
 		setPending(false)
 		if (result.error) {
 			console.warn("[onboarding] error", result.error)
@@ -48,10 +49,15 @@ function OnboardingPage() {
 			setError(e.message || `Could not create workspace (status ${e.status ?? "?"})`)
 			return
 		}
-		// Wipe the session cache so beforeLoad re-fetches and sees the new
-		// activeOrganizationId — invalidate leaves stale data in place.
+		// Wipe both session AND orgs caches so beforeLoads re-fetch and see
+		// the new active org + the new entry in the org list.
 		queryClient.removeQueries({ queryKey: ["auth"] })
-		await navigate({ to: "/" })
+		// Navigate straight into the new workspace by its slug — `organization.create`
+		// already set it active server-side, so the org-slug gate will pass.
+		await navigate({
+			to: "/$orgSlug/projects",
+			params: { orgSlug: result.data?.slug ?? newSlug }
+		})
 	}
 
 	function handleNameChange(value: string) {

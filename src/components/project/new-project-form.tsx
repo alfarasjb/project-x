@@ -7,10 +7,11 @@ import { apiPost } from "@/lib/api"
 
 /**
  * Adds a project — name + an absolute path to a local repo. On success the new
- * project's graph page opens (empty, awaiting a crawl). A bad path comes back
- * from the server as a 400 and is shown inline.
+ * project's dashboard opens (empty, awaiting a crawl). A bad path comes back
+ * from the server as a 400 and is shown inline. `orgSlug` is the active
+ * workspace's slug from the URL — every nav stays inside that workspace.
  */
-export function NewProjectForm() {
+export function NewProjectForm({ orgSlug }: { orgSlug: string }) {
 	const [name, setName] = useState("")
 	const [rootPath, setRootPath] = useState("")
 	const queryClient = useQueryClient()
@@ -20,7 +21,10 @@ export function NewProjectForm() {
 		mutationFn: () => apiPost("/api/projects", ProjectSchema, { name, rootPath }),
 		onSuccess: (project) => {
 			void queryClient.invalidateQueries({ queryKey: ["projects"] })
-			void navigate({ to: "/projects/$projectId", params: { projectId: project.id } })
+			void navigate({
+				to: "/$orgSlug/projects/$projectId",
+				params: { orgSlug, projectId: project.id }
+			})
 		}
 	})
 

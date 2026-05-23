@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query"
-import { authClient } from "@/lib/auth-client"
+import { authClient, type AuthOrganization } from "@/lib/auth-client"
 
 /**
  * Session as a React Query — lets route loaders pre-fetch it via
@@ -15,6 +15,21 @@ export const sessionQueryOptions = queryOptions({
 	queryFn: async () => {
 		const { data } = await authClient.getSession()
 		return data ?? null
+	},
+	staleTime: 60_000
+})
+
+/**
+ * The current user's organizations. Cached so the root beforeLoad and the
+ * `$orgSlug` layout beforeLoad don't each issue their own request on every
+ * navigation. Mutations (create-org, leave-org, invite-accept) should
+ * `queryClient.removeQueries({ queryKey: ['auth', 'orgs'] })` after.
+ */
+export const orgsQueryOptions = queryOptions({
+	queryKey: ["auth", "orgs"],
+	queryFn: async (): Promise<AuthOrganization[]> => {
+		const { data } = await authClient.organization.list()
+		return data ?? []
 	},
 	staleTime: 60_000
 })

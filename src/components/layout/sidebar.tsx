@@ -1,7 +1,8 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { LayoutDashboard, LogOut, Workflow } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
+import { orgsQueryOptions } from "@/lib/auth-queries"
 import { cn } from "@/lib/utils"
 
 const ITEM =
@@ -13,18 +14,24 @@ const LINK = cn(
 )
 
 /**
- * The app's left rail — workspace identity (the active org), the current
- * project's view nav, and the signed-in user / sign-out at the foot.
+ * The app's left rail — workspace identity (the active org from the URL),
+ * the current project's view nav, and the signed-in user / sign-out at the
+ * foot.
  *
- * Project *selection* lives in the header switcher; this rail picks the view
- * (Dashboard / Graph) within the chosen project, and is inert on routes with
- * no project (the `/` home).
+ * Project *selection* lives in the header switcher; this rail picks the
+ * view (Dashboard / Graph) within the chosen project, and is inert on
+ * routes with no project (the org's `/$orgSlug/projects` browser).
  */
 export function Sidebar() {
-	// Loose params: `projectId` is set on project routes, undefined on `/`.
-	const { projectId } = useParams({ strict: false })
+	// Loose params: `orgSlug` is set on any org-scoped route; `projectId`
+	// only on the project layout's children. Undefined on signin/onboarding.
+	const { orgSlug, projectId } = useParams({ strict: false })
 	const { data: session } = authClient.useSession()
-	const { data: activeOrg } = authClient.useActiveOrganization()
+	// Use the cached org list rather than authClient.useActiveOrganization()
+	// so we always render the org named in the URL — switching the URL slug
+	// should switch the chrome immediately, even before setActive completes.
+	const { data: orgs } = useQuery(orgsQueryOptions)
+	const activeOrg = orgs?.find((org) => org.slug === orgSlug)
 	const navigate = useNavigate()
 	const queryClient = useQueryClient()
 
@@ -40,6 +47,7 @@ export function Sidebar() {
 		// directly means the root beforeLoad sees "no session" immediately and
 		// lets the user through to /signin instead of bouncing them back to /.
 		queryClient.setQueryData(["auth", "session"], null)
+		queryClient.removeQueries({ queryKey: ["auth", "orgs"] })
 		queryClient.removeQueries({ queryKey: ["projects"] })
 		queryClient.removeQueries({ queryKey: ["project"] })
 		await navigate({ to: "/signin" })
@@ -55,18 +63,22 @@ export function Sidebar() {
 			</div>
 
 			<nav className="flex flex-1 flex-col gap-0.5 p-2">
-				{projectId ? (
+				{orgSlug && projectId ? (
 					<>
 						<Link
-							to="/projects/$projectId"
-							params={{ projectId }}
+							to="/$orgSlug/projects/$projectId"
+							params={{ orgSlug, projectId }}
 							activeOptions={{ exact: true }}
 							className={LINK}
 						>
 							<LayoutDashboard className="size-4 shrink-0" />
 							Dashboard
 						</Link>
-						<Link to="/projects/$projectId/graph" params={{ projectId }} className={LINK}>
+						<Link
+							to="/$orgSlug/projects/$projectId/graph"
+							params={{ orgSlug, projectId }}
+							className={LINK}
+						>
 							<Workflow className="size-4 shrink-0" />
 							Graph
 						</Link>

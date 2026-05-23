@@ -2,9 +2,7 @@ import { createRootRouteWithContext, Outlet, redirect, useLocation } from "@tans
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools"
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
 import type { QueryClient } from "@tanstack/react-query"
-import { authClient } from "@/lib/auth-client"
-import { sessionQueryOptions } from "@/lib/auth-queries"
-import { projectsQueryOptions } from "@/lib/queries"
+import { orgsQueryOptions, sessionQueryOptions } from "@/lib/auth-queries"
 import { AppShell } from "@/components/layout/app-shell"
 
 /** Router context — shared with every route loader. */
@@ -31,16 +29,12 @@ const BARE_LAYOUT_ROUTES = new Set([...ANONYMOUS_ROUTES, ...NO_ORG_ROUTES])
 export const Route = createRootRouteWithContext<RouterContext>()({
 	component: RootLayout,
 	/**
-	 * Three-zone routing:
-	 *   ANONYMOUS (signin/signup):   no session required
-	 *   NO_ORG (onboarding):         session required, NO org required
-	 *   APP (everything else):       session + active org required
-	 *
-	 * The gate routes the user into the correct zone for their state:
-	 *   no session     → /signin       (unless already on an ANONYMOUS route)
-	 *   session, 0 orgs → /onboarding   (unless already on /onboarding)
-	 *   session, has orgs but on signin/signup or /onboarding → /
-	 *   session, has orgs, no active org → setActive(first) and continue
+	 * Auth zone gate. Org-membership and active-org tracking happen in the
+	 * `/$orgSlug` layout — here we only decide which zone the user belongs in:
+	 *   - no session                                → /signin
+	 *   - session but on signin/signup              → /          (index redirects to org)
+	 *   - session, zero orgs                         → /onboarding
+	 *   - session, has orgs, but on /onboarding     → /          (index redirects to org)
 	 */
 	beforeLoad: async ({ context, location }) => {
 		const session = await context.queryClient.ensureQueryData(sessionQueryOptions)
@@ -58,10 +52,9 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 			throw redirect({ to: "/" })
 		}
 
-		// Need to know whether they have any orgs to decide between onboarding
-		// and the app proper. One extra request on first nav, then cached.
-		const orgList = await authClient.organization.list()
-		const orgs = orgList.data ?? []
+		// One source of truth for "do I have any orgs?" — cached so the
+		// `$orgSlug` beforeLoad below doesn't re-fetch.
+		const orgs = await context.queryClient.ensureQueryData(orgsQueryOptions)
 
 		if (orgs.length === 0) {
 			if (isOnboarding) return
@@ -72,24 +65,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 		if (isOnboarding) {
 			throw redirect({ to: "/" })
 		}
-
-		// Ensure ONE of the user's orgs is active. New sessions land here with
-		// activeOrganizationId = null even if the user has memberships
-		// (sign-in doesn't auto-pick an org); pick the first.
-		if (!session.session.activeOrganizationId) {
-			const first = orgs[0]
-			if (first) {
-				await authClient.organization.setActive({ organizationId: first.id })
-				await context.queryClient.invalidateQueries({ queryKey: ["auth"] })
-				await context.queryClient.ensureQueryData(sessionQueryOptions)
-			}
-		}
-	},
-	loader: ({ context, location }) => {
-		// Only prefetch the project list when the user is past onboarding —
-		// otherwise the request would 400 with "no active organization".
-		if (BARE_LAYOUT_ROUTES.has(location.pathname)) return
-		void context.queryClient.prefetchQuery(projectsQueryOptions())
 	}
 })
 

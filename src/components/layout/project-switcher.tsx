@@ -8,9 +8,10 @@ import { cn } from "@/lib/utils"
 /**
  * Header project switcher — a dropdown that picks which project the workspace
  * is showing. Closes via a transparent full-screen click-catcher rendered
- * behind the menu, so no ref/effect is needed.
+ * behind the menu, so no ref/effect is needed. `orgSlug` comes from the
+ * route params; every Link is built relative to that current workspace.
  */
-export function ProjectSwitcher({ projectId }: { projectId: string }) {
+export function ProjectSwitcher({ orgSlug, projectId }: { orgSlug: string; projectId: string }) {
 	const [open, setOpen] = useState(false)
 	const { data: projects } = useQuery(projectsQueryOptions())
 	const current = projects?.find((project) => project.id === projectId)
@@ -36,8 +37,8 @@ export function ProjectSwitcher({ projectId }: { projectId: string }) {
 						{projects?.map((project) => (
 							<Link
 								key={project.id}
-								to="/projects/$projectId"
-								params={{ projectId: project.id }}
+								to="/$orgSlug/projects/$projectId"
+								params={{ orgSlug, projectId: project.id }}
 								onClick={() => setOpen(false)}
 								className="hover:bg-muted flex items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors"
 							>
@@ -52,7 +53,8 @@ export function ProjectSwitcher({ projectId }: { projectId: string }) {
 						))}
 						<div className="my-1 border-t" />
 						<Link
-							to="/"
+							to="/$orgSlug/projects"
+							params={{ orgSlug }}
 							onClick={() => setOpen(false)}
 							className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors"
 						>

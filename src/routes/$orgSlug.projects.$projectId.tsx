@@ -3,7 +3,7 @@ import { graphQueryOptions, projectQueryOptions } from "@/lib/queries"
 import { CrawlButton } from "@/components/graph/crawl-button"
 import { ProjectSwitcher } from "@/components/layout/project-switcher"
 
-export const Route = createFileRoute("/projects/$projectId")({
+export const Route = createFileRoute("/$orgSlug/projects/$projectId")({
 	component: ProjectLayout,
 	loader: ({ context, params }) => {
 		// Warm both caches: the switcher reads the project list, both child
@@ -20,12 +20,12 @@ export const Route = createFileRoute("/projects/$projectId")({
  * the sidebar; this header switches *which* project and crawls it.
  */
 function ProjectLayout() {
-	const { projectId } = Route.useParams()
+	const { orgSlug, projectId } = Route.useParams()
 
 	return (
 		<div className="flex h-full flex-col">
 			<header className="flex shrink-0 items-center gap-3 border-b px-4 py-2">
-				<ProjectSwitcher projectId={projectId} />
+				<ProjectSwitcher orgSlug={orgSlug} projectId={projectId} />
 				<div className="ml-auto">
 					<CrawlButton projectId={projectId} />
 				</div>
