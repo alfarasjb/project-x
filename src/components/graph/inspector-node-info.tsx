@@ -18,15 +18,27 @@ export function InspectorNodeInfo({ node }: { node: GraphNode }) {
 						{node.kind}
 					</span>
 				</div>
-				{node.layer && (
-					<span
-						className={cn(
-							"mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
-							LAYER_BADGE[node.layer]
+				{(node.layer || node.classification) && (
+					<div className="mt-1 flex flex-wrap items-center gap-1">
+						{node.layer && (
+							<span
+								className={cn(
+									"inline-block rounded px-1.5 py-0.5 text-[10px] font-medium",
+									LAYER_BADGE[node.layer]
+								)}
+							>
+								{node.layer}
+							</span>
 						)}
-					>
-						{node.layer}
-					</span>
+						{node.classification && (
+							<span
+								className="bg-muted text-muted-foreground inline-block rounded px-1.5 py-0.5 font-mono text-[10px] font-medium"
+								title="Audit classification"
+							>
+								{node.classification}
+							</span>
+						)}
+					</div>
 				)}
 			</div>
 

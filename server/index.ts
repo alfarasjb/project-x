@@ -4,6 +4,7 @@ import cors from "@fastify/cors"
 import { authRoutes } from "@server/routes/auth"
 import { projectRoutes } from "@server/routes/projects"
 import { graphRoutes } from "@server/routes/graph"
+import { issueRoutes } from "@server/routes/issues"
 
 const PORT = env.PORT
 
@@ -22,6 +23,7 @@ app.get("/api/health", () => ({
 await app.register(authRoutes)
 await app.register(projectRoutes)
 await app.register(graphRoutes)
+await app.register(issueRoutes)
 
 try {
 	await app.listen({ port: PORT, host: "0.0.0.0" })

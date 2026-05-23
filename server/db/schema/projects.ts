@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm"
 import { jsonb, text, uniqueIndex, uuid } from "drizzle-orm/pg-core"
 import type { Graph } from "@shared/schemas/graph"
+import type { Issue } from "@shared/schemas/issue"
 import { schema, timestamp, timestampConfig, timestamps } from "@server/db/schema/common"
 import { organization } from "@server/db/schema/auth"
 
@@ -37,6 +38,14 @@ export const projects = schema.table(
 			.$type<Graph>()
 			.notNull()
 			.default(sql`'{"nodes":[],"edges":[]}'::jsonb`),
+		/**
+		 * Audit findings from the most recent crawl. Written by `runAudit` and
+		 * carried over (preserving `firstDetected`) across crawls.
+		 */
+		crawlIssues: jsonb("crawl_issues")
+			.$type<Issue[]>()
+			.notNull()
+			.default(sql`'[]'::jsonb`),
 		lastParsedAt: timestamp("last_parsed_at", timestampConfig),
 		createdAt: timestamps.createdAt,
 		updatedAt: timestamps.updatedAt,

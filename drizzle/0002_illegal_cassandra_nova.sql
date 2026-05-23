@@ -1,0 +1,1 @@
+ALTER TABLE "projectx"."projects" ADD COLUMN "crawl_issues" jsonb DEFAULT '[]'::jsonb NOT NULL;

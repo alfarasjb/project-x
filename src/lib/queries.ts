@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query"
 import { z } from "zod"
 import { GraphSchema } from "@shared/schemas/graph"
+import { IssuesSchema } from "@shared/schemas/issue"
 import { ProjectSchema } from "@shared/schemas/project"
 import { apiGet } from "./api"
 
@@ -37,4 +38,11 @@ export const graphQueryOptions = (projectId: string) =>
 	queryOptions({
 		queryKey: ["project", projectId, "graph"],
 		queryFn: () => apiGet(`/api/projects/${projectId}/graph`, GraphSchema)
+	})
+
+/** A project's audit issues — written by every crawl, never edited directly. */
+export const issuesQueryOptions = (projectId: string) =>
+	queryOptions({
+		queryKey: ["project", projectId, "issues"],
+		queryFn: () => apiGet(`/api/projects/${projectId}/issues`, IssuesSchema)
 	})

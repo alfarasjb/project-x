@@ -1,9 +1,17 @@
 import { eq } from "drizzle-orm"
-import { GraphSchema, type Description, type Graph, type GraphNode } from "@shared/schemas/graph"
+import {
+	GraphSchema,
+	type Description,
+	type Graph,
+	type GraphNode,
+	type NodeClassification
+} from "@shared/schemas/graph"
+import { IssuesSchema, type Issue } from "@shared/schemas/issue"
 import type { Project } from "@shared/schemas/project"
 import { getDb } from "@server/db"
 import { projects } from "@server/db/schema/projects"
 import { parseProject } from "@server/parser"
+import { runAudit, mergeIssueHistory } from "@server/audit/run"
 import { AppError } from "@server/utils/errors"
 
 /**
@@ -46,14 +54,80 @@ export async function saveActualGraph(projectId: string, graph: Graph): Promise<
 }
 
 /**
- * Crawl a project: re-parse its codebase and persist the result as the actual
- * graph. This is the "Crawl" action — the one operation that refreshes the
- * parsed graph. Reads (`getProjectGraph`) only ever return what a crawl wrote.
+ * Read the audit issues stored on a project. Returns an empty array for a
+ * project that hasn't been crawled yet (the column defaults to `[]`).
+ */
+export async function getProjectIssues(projectId: string): Promise<Issue[]> {
+	const db = getDb()
+	const [row] = await db
+		.select({ crawlIssues: projects.crawlIssues })
+		.from(projects)
+		.where(eq(projects.id, projectId))
+		.limit(1)
+	if (!row) return []
+	return IssuesSchema.parse(row.crawlIssues)
+}
+
+/**
+ * Persist the audit's findings as a JSONB array on the project row. Called
+ * by `crawlProject` after `runAudit`; not exposed as a route since issues
+ * are derived, not user-edited.
+ */
+async function saveProjectIssues(projectId: string, issues: Issue[]): Promise<void> {
+	const db = getDb()
+	const validated = IssuesSchema.parse(issues)
+	await db
+		.update(projects)
+		.set({ crawlIssues: validated, updatedAt: new Date().toISOString() })
+		.where(eq(projects.id, projectId))
+}
+
+/**
+ * Carry agent-set fields (`description`, `classification`) from the previous
+ * stored graph onto a freshly-parsed one, matching nodes by `path`. The
+ * parser doesn't know about anything the user or an agent wrote — without
+ * this merge, every re-crawl would wipe it.
+ *
+ * Identity is `path`, not `id`: ids are regenerated each parse, paths are
+ * the stable thing a file/module/symbol has across crawls.
+ */
+function mergePreservedFields(fresh: Graph, previous: Graph): Graph {
+	const previousByPath = new Map(previous.nodes.map((node) => [node.path, node]))
+	return {
+		...fresh,
+		nodes: fresh.nodes.map((node) => {
+			const prev = previousByPath.get(node.path)
+			if (!prev) return node
+			return {
+				...node,
+				...(prev.description !== undefined ? { description: prev.description } : {}),
+				...(prev.classification !== undefined ? { classification: prev.classification } : {})
+			}
+		})
+	}
+}
+
+/**
+ * Crawl a project: re-parse its codebase, run the audit pass, and persist
+ * both. This is the "Crawl" action — the one operation that refreshes the
+ * parsed graph. Reads (`getProjectGraph`, `getProjectIssues`) only ever
+ * return what a crawl wrote.
+ *
+ * Crawl is non-destructive for agent-written data: descriptions and
+ * classifications from the previous graph are carried over onto matching
+ * nodes by path. The audit's `firstDetected` timestamps are similarly
+ * preserved per-issue id, so "this circular dependency has existed since
+ * the 2026-05-15 crawl" survives the next crawl.
  */
 export async function crawlProject(project: Project): Promise<Graph> {
-	const graph = await parseProject(project.rootPath)
-	await saveActualGraph(project.id, graph)
-	return graph
+	const fresh = await parseProject(project.rootPath)
+	const previous = await getProjectGraph(project.id)
+	const previousIssues = await getProjectIssues(project.id)
+	const merged = previous ? mergePreservedFields(fresh, previous.actual) : fresh
+	const issues = mergeIssueHistory(runAudit(merged), previousIssues)
+	await saveActualGraph(project.id, merged)
+	await saveProjectIssues(project.id, issues)
+	return merged
 }
 
 /**
@@ -85,6 +159,32 @@ export async function setNodeDescription(
 	}
 
 	node.description = description
+	await saveActualGraph(projectId, graph.actual)
+	return node
+}
+
+/**
+ * Set one node's classification (business-logic / routing / data-access /
+ * etc.) in the stored actual graph. Like `setNodeDescription`, this reads
+ * the whole JSONB blob, mutates the one node, and writes it back — fine at
+ * MVP scale; revisit if the audit pipeline starts firing many writes per
+ * second.
+ *
+ * Throws if the project or node is unknown. No overwrite guard: classifications
+ * have no "manual vs ai" provenance and the most recent guess wins.
+ */
+export async function setNodeClassification(
+	projectId: string,
+	nodeId: string,
+	classification: NodeClassification
+): Promise<GraphNode> {
+	const graph = await getProjectGraph(projectId)
+	if (!graph) throw new AppError(404, `Project not found: ${projectId}`)
+
+	const node = graph.actual.nodes.find((candidate) => candidate.id === nodeId)
+	if (!node) throw new AppError(404, `No node "${nodeId}" in the actual graph.`)
+
+	node.classification = classification
 	await saveActualGraph(projectId, graph.actual)
 	return node
 }
