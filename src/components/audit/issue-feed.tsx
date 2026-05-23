@@ -1,10 +1,15 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { AlertOctagon, AlertTriangle, ChevronDown, ChevronRight, Info } from "lucide-react"
+import { AlertOctagon, AlertTriangle, ChevronDown, ChevronRight, Info, Search } from "lucide-react"
 import type { Issue, IssueSeverity } from "@shared/schemas/issue"
 import { AnalyzeButton } from "@/components/audit/analyze-button"
 import { issuesQueryOptions } from "@/lib/queries"
 import { cn } from "@/lib/utils"
+
+/** Filter + sort + page state — all client-side; the API returns the full list. */
+type SeverityFilter = "all" | IssueSeverity
+type SortKey = "severity" | "blast" | "detected"
+const PAGE_SIZE = 20
 
 /**
  * Issue Feed — the primary dashboard panel.
@@ -16,42 +21,129 @@ import { cn } from "@/lib/utils"
  */
 export function IssueFeed({ projectId }: { projectId: string }) {
 	const { data: issues, error, isLoading } = useQuery(issuesQueryOptions(projectId))
+	const [search, setSearch] = useState("")
+	const [severity, setSeverity] = useState<SeverityFilter>("all")
+	const [category, setCategory] = useState<string>("all")
+	const [sortKey, setSortKey] = useState<SortKey>("severity")
+	const [page, setPage] = useState(0)
+
+	// Unique categories sourced from the data, not hard-coded — new rules
+	// (boundary, ai-review, future) appear in the dropdown automatically.
+	const categories = useMemo(() => {
+		const set = new Set<string>()
+		for (const issue of issues ?? []) set.add(issue.category)
+		return [...set].sort()
+	}, [issues])
+
+	// Derived list: filter → sort → paginate. Recomputes only when inputs change.
+	const filtered = useMemo(() => {
+		const haystack = search.trim().toLowerCase()
+		return (issues ?? [])
+			.filter((issue) => (severity === "all" ? true : issue.severity === severity))
+			.filter((issue) => (category === "all" ? true : issue.category === category))
+			.filter((issue) => (haystack ? matchesSearch(issue, haystack) : true))
+			.sort(sortComparator(sortKey))
+	}, [issues, search, severity, category, sortKey])
+
+	// Reset to first page when a filter change shrinks the result set out from under us.
+	const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+	const safePage = Math.min(page, pageCount - 1)
+	const pageStart = safePage * PAGE_SIZE
+	const pageEnd = Math.min(pageStart + PAGE_SIZE, filtered.length)
+	const pageItems = filtered.slice(pageStart, pageEnd)
+
+	const counts = useMemo(() => countBySeverity(issues ?? []), [issues])
 
 	if (isLoading) {
 		return (
-			<section className="space-y-3">
-				<header className="flex items-start justify-between gap-3">
-					<h2 className="font-display text-sm font-semibold">Issues</h2>
-					<AnalyzeButton projectId={projectId} />
-				</header>
+			<FeedShell projectId={projectId}>
 				<p className="text-muted-foreground text-sm">Loading…</p>
-			</section>
+			</FeedShell>
 		)
 	}
-
 	if (error) {
 		return (
-			<section className="space-y-3">
-				<header className="flex items-start justify-between gap-3">
-					<h2 className="font-display text-sm font-semibold">Issues</h2>
-					<AnalyzeButton projectId={projectId} />
-				</header>
+			<FeedShell projectId={projectId}>
 				<p className="text-destructive text-sm">{error.message}</p>
-			</section>
+			</FeedShell>
 		)
 	}
 
-	const sorted = [...(issues ?? [])].sort(bySeverity)
-	const counts = countBySeverity(sorted)
+	return (
+		<FeedShell projectId={projectId} counts={counts} total={issues?.length ?? 0}>
+			<Toolbar
+				search={search}
+				onSearch={(value) => {
+					setSearch(value)
+					setPage(0)
+				}}
+				severity={severity}
+				onSeverity={(value) => {
+					setSeverity(value)
+					setPage(0)
+				}}
+				category={category}
+				categories={categories}
+				onCategory={(value) => {
+					setCategory(value)
+					setPage(0)
+				}}
+				sortKey={sortKey}
+				onSortKey={setSortKey}
+			/>
 
+			{filtered.length === 0 ? (
+				<div className="bg-card rounded-xl border px-4 py-6 text-center">
+					<p className="text-muted-foreground text-sm">
+						{issues && issues.length > 0
+							? "No issues match the current filters."
+							: "No issues. Crawl the project to run the audit."}
+					</p>
+				</div>
+			) : (
+				<>
+					<div className="flex flex-col gap-2">
+						{pageItems.map((issue) => (
+							<IssueCard key={issue.id} issue={issue} />
+						))}
+					</div>
+					<Pagination
+						start={filtered.length === 0 ? 0 : pageStart + 1}
+						end={pageEnd}
+						total={filtered.length}
+						page={safePage}
+						pageCount={pageCount}
+						onPage={setPage}
+					/>
+				</>
+			)}
+		</FeedShell>
+	)
+}
+
+/** Outer chrome — header with title, counts, and the Analyze button. */
+function FeedShell({
+	projectId,
+	counts,
+	total,
+	children
+}: {
+	projectId: string
+	counts?: Record<IssueSeverity, number>
+	total?: number
+	children: React.ReactNode
+}) {
 	return (
 		<section className="space-y-3">
 			<header className="flex items-start justify-between gap-3">
 				<div className="flex items-baseline gap-3">
 					<h2 className="font-display text-sm font-semibold">
-						Issues <span className="text-muted-foreground font-normal">({sorted.length})</span>
+						Issues{" "}
+						{total !== undefined && (
+							<span className="text-muted-foreground font-normal">({total})</span>
+						)}
 					</h2>
-					{sorted.length > 0 && (
+					{counts && total !== undefined && total > 0 && (
 						<div className="text-muted-foreground flex items-center gap-3 text-[11px]">
 							{counts.critical > 0 && (
 								<span className="text-destructive font-medium">{counts.critical} critical</span>
@@ -63,22 +155,147 @@ export function IssueFeed({ projectId }: { projectId: string }) {
 				</div>
 				<AnalyzeButton projectId={projectId} />
 			</header>
-
-			{sorted.length === 0 ? (
-				<div className="bg-card rounded-xl border px-4 py-6 text-center">
-					<p className="text-muted-foreground text-sm">
-						No issues. Crawl the project to run the audit.
-					</p>
-				</div>
-			) : (
-				<div className="flex flex-col gap-2">
-					{sorted.map((issue) => (
-						<IssueCard key={issue.id} issue={issue} />
-					))}
-				</div>
-			)}
+			{children}
 		</section>
 	)
+}
+
+function Toolbar({
+	search,
+	onSearch,
+	severity,
+	onSeverity,
+	category,
+	categories,
+	onCategory,
+	sortKey,
+	onSortKey
+}: {
+	search: string
+	onSearch: (value: string) => void
+	severity: SeverityFilter
+	onSeverity: (value: SeverityFilter) => void
+	category: string
+	categories: string[]
+	onCategory: (value: string) => void
+	sortKey: SortKey
+	onSortKey: (value: SortKey) => void
+}) {
+	return (
+		<div className="flex items-center gap-2">
+			<div className="relative flex-1">
+				<Search className="text-muted-foreground absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+				<input
+					type="text"
+					value={search}
+					onChange={(event) => onSearch(event.target.value)}
+					placeholder="Search issues, files, or concerns"
+					className="border-border bg-card focus:border-foreground/30 h-8 w-full rounded-md border pr-2 pl-8 text-xs outline-none"
+				/>
+			</div>
+			<select
+				value={severity}
+				onChange={(event) => onSeverity(event.target.value as SeverityFilter)}
+				className="border-border bg-card h-8 rounded-md border px-2 text-xs"
+				aria-label="Filter by severity"
+			>
+				<option value="all">All severities</option>
+				<option value="critical">Critical</option>
+				<option value="warning">Warning</option>
+				<option value="info">Info</option>
+			</select>
+			<select
+				value={category}
+				onChange={(event) => onCategory(event.target.value)}
+				className="border-border bg-card h-8 rounded-md border px-2 text-xs"
+				aria-label="Filter by category"
+			>
+				<option value="all">All categories</option>
+				{categories.map((cat) => (
+					<option key={cat} value={cat}>
+						{cat}
+					</option>
+				))}
+			</select>
+			<select
+				value={sortKey}
+				onChange={(event) => onSortKey(event.target.value as SortKey)}
+				className="border-border bg-card h-8 rounded-md border px-2 text-xs"
+				aria-label="Sort by"
+			>
+				<option value="severity">Sort: severity</option>
+				<option value="blast">Sort: blast radius</option>
+				<option value="detected">Sort: first detected</option>
+			</select>
+		</div>
+	)
+}
+
+function Pagination({
+	start,
+	end,
+	total,
+	page,
+	pageCount,
+	onPage
+}: {
+	start: number
+	end: number
+	total: number
+	page: number
+	pageCount: number
+	onPage: (value: number) => void
+}) {
+	if (pageCount <= 1) return null
+	return (
+		<div className="text-muted-foreground flex items-center justify-between text-[11px]">
+			<span>
+				Showing {start}–{end} of {total}
+			</span>
+			<div className="flex gap-1">
+				<button
+					type="button"
+					onClick={() => onPage(page - 1)}
+					disabled={page === 0}
+					className="border-border bg-card hover:bg-muted/50 rounded-md border px-2 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-50"
+				>
+					Prev
+				</button>
+				<button
+					type="button"
+					onClick={() => onPage(page + 1)}
+					disabled={page >= pageCount - 1}
+					className="border-border bg-card hover:bg-muted/50 rounded-md border px-2 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-50"
+				>
+					Next
+				</button>
+			</div>
+		</div>
+	)
+}
+
+/**
+ * Search predicate: case-insensitive substring match across the title, the
+ * affected paths, and (for ai-review) the concern messages. Concern messages
+ * matter — they're often the most descriptive text on an issue.
+ */
+function matchesSearch(issue: Issue, query: string): boolean {
+	if (issue.title.toLowerCase().includes(query)) return true
+	if (issue.affected.some((path) => path.toLowerCase().includes(query))) return true
+	if (issue.concerns?.some((concern) => concern.message.toLowerCase().includes(query))) return true
+	if (issue.description.toLowerCase().includes(query)) return true
+	return false
+}
+
+function sortComparator(key: SortKey): (a: Issue, b: Issue) => number {
+	if (key === "blast") {
+		return (a, b) => (b.blastRadius?.total ?? 0) - (a.blastRadius?.total ?? 0) || bySeverity(a, b)
+	}
+	if (key === "detected") {
+		// Newest first.
+		return (a, b) => b.firstDetected.localeCompare(a.firstDetected)
+	}
+	return bySeverity
 }
 
 function IssueCard({ issue }: { issue: Issue }) {
