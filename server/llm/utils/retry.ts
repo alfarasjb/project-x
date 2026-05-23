@@ -33,7 +33,7 @@ export async function executeWithRetry<T>(
 
 			const delay = getRetryDelay(normalized.type, attempt)
 			console.warn(
-				`[llm] ${options.operationName ?? "operation"} failed (${normalized.type} from ${normalized.provider}), retrying in ${Math.round(delay)}ms — attempt ${attempt + 1}/${maxRetries + 1}`
+				`[llm] ${options.operationName ?? "operation"} failed (${normalized.type} from ${normalized.provider}): ${normalized.message} — retrying in ${Math.round(delay)}ms — attempt ${attempt + 1}/${maxRetries + 1}`
 			)
 			await sleep(delay)
 		}

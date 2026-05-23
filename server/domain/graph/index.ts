@@ -103,7 +103,8 @@ function mergePreservedFields(fresh: Graph, previous: Graph): Graph {
 				...node,
 				...(prev.description !== undefined ? { description: prev.description } : {}),
 				...(prev.classification !== undefined ? { classification: prev.classification } : {}),
-				...(prev.analyzedHash !== undefined ? { analyzedHash: prev.analyzedHash } : {})
+				...(prev.analyzedHash !== undefined ? { analyzedHash: prev.analyzedHash } : {}),
+				...(prev.concerns !== undefined ? { concerns: prev.concerns } : {})
 			}
 		})
 	}

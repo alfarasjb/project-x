@@ -119,7 +119,23 @@ function IssueCard({ issue }: { issue: Issue }) {
 
 			{open && (
 				<div className="space-y-3 border-t px-3 py-3">
-					<p className="text-sm leading-snug">{issue.description}</p>
+					{issue.concerns && issue.concerns.length > 0 ? (
+						<ul className="space-y-2">
+							{issue.concerns.map((concern, idx) => (
+								<li
+									key={`${concern.category}:${idx}`}
+									className="bg-muted/40 rounded-md border border-border/40 p-2.5"
+								>
+									<span className="bg-muted text-muted-foreground inline-block rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide">
+										{concern.category}
+									</span>
+									<p className="mt-1.5 text-sm leading-snug">{concern.message}</p>
+								</li>
+							))}
+						</ul>
+					) : (
+						<p className="text-sm leading-snug whitespace-pre-line">{issue.description}</p>
+					)}
 					{issue.affected.length > 0 && (
 						<div className="space-y-1">
 							<p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide">

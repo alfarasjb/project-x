@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { ConcernSchema } from "@shared/schemas/graph"
 
 /**
  * Issue schema — one architectural finding from the audit pass.
@@ -49,6 +50,12 @@ export const IssueSchema = z.object({
 	/** Node paths the issue points at — usually file paths. */
 	affected: z.array(z.string().min(1)),
 	blastRadius: BlastRadiusSchema.optional(),
+	/**
+	 * Structured concerns attached to an issue — populated by the AI
+	 * `aiReview` rule so the UI can render them as a tagged list instead
+	 * of parsing the description string. Other rules leave this empty.
+	 */
+	concerns: z.array(ConcernSchema).optional(),
 	/** ISO timestamp of when this finding was first observed across crawls. */
 	firstDetected: z.string().min(1)
 })

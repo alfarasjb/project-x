@@ -34,6 +34,11 @@ export abstract class BaseLlmAdapter implements LlmAdapter {
 				const raw = await this.callGenerateStructured(config, schema, tool)
 				const parsed = schema.safeParse(raw.content)
 				if (!parsed.success) {
+					// Log the raw payload once so we can see WHAT the model returned
+					// when validation fails — without this, the retry loop swallows
+					// the only signal we have. Truncated to keep logs sane.
+					const snapshot = JSON.stringify(raw.content).slice(0, 500)
+					console.warn(`[llm] ${this.provider} tool_use payload (truncated): ${snapshot}`)
 					throw new LlmError(
 						LlmErrorType.PARSING,
 						this.provider,

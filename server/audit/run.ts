@@ -1,5 +1,6 @@
 import type { Graph } from "@shared/schemas/graph"
 import type { Issue } from "@shared/schemas/issue"
+import { aiReview } from "@server/audit/rules/ai-review"
 import { circularDependencies } from "@server/audit/rules/circular-dependencies"
 import { godFiles } from "@server/audit/rules/god-files"
 import { bidirectionalDependencies } from "@server/audit/rules/bidirectional-deps"
@@ -18,7 +19,8 @@ export function runAudit(graph: Graph): Issue[] {
 	const rules: readonly ((graph: Graph) => Omit<Issue, "firstDetected">[])[] = [
 		circularDependencies,
 		godFiles,
-		bidirectionalDependencies
+		bidirectionalDependencies,
+		aiReview
 	]
 	return rules.flatMap((rule) => rule(graph).map((issue) => ({ ...issue, firstDetected: now })))
 }

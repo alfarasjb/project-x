@@ -2,7 +2,9 @@ import { readFile } from "node:fs/promises"
 import { posix } from "node:path"
 import { z } from "zod"
 import {
+	ConcernSchema,
 	NodeClassificationSchema,
+	type Concern,
 	type Graph,
 	type GraphNode,
 	type NodeClassification
@@ -19,12 +21,25 @@ import {
  * existing `description` shape minus `source` (we set that ourselves —
  * the AI never claims its output is "manual").
  */
+/**
+ * Output schema sent to Claude as the `analyze_node` tool's input_schema.
+ *
+ * Deliberately FLAT — nested objects (`description: { what, why }`) cause
+ * intermittent format drift where the model emits XML-tool-call leakage
+ * (`<parameter name="what">`) inside a stringified description. Flat
+ * top-level properties round-trip cleanly. We re-assemble the nested
+ * `Description` server-side in `applyAnalyzeResult`.
+ *
+ * `concerns` defaults to `[]` on parse: Claude usually returns the field
+ * explicitly, but on clean files it sometimes interprets "empty if clean"
+ * as "omit if clean" and drops it. Defaulting prevents that drift from
+ * burning a retry without weakening the prompt's intent.
+ */
 const AnalyzeOutputSchema = z.object({
 	classification: NodeClassificationSchema,
-	description: z.object({
-		what: z.string().min(1).max(2000),
-		why: z.string().min(1).max(2000).optional()
-	})
+	summary: z.string().min(1).max(2000),
+	rationale: z.string().min(1).max(2000).optional(),
+	concerns: z.array(ConcernSchema).max(5).default([])
 })
 
 const ANALYZE_TOOL = {
@@ -160,14 +175,23 @@ async function readNodeInput(
 
 function applyAnalyzeResult(
 	node: GraphNode,
-	output: { classification: NodeClassification; description: { what: string; why?: string } }
+	output: {
+		classification: NodeClassification
+		summary: string
+		rationale?: string
+		concerns: Concern[]
+	}
 ): void {
 	node.classification = output.classification
+	// Re-assemble the nested Description from the flat tool-call output.
 	node.description = {
-		what: output.description.what,
+		what: output.summary,
 		source: "ai",
-		...(output.description.why ? { why: output.description.why } : {})
+		...(output.rationale ? { why: output.rationale } : {})
 	}
+	// Always write `concerns` — even when empty — so a previously-flagged
+	// file that's been cleaned up loses its concerns on re-analyze.
+	node.concerns = output.concerns
 	// Stamp the hash we analyzed at — this is what `shouldAnalyze` reads next
 	// run to skip unchanged nodes. Both files (content hash) and modules
 	// (sorted-child-paths hash) carry one; the rare node without metrics

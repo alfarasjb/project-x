@@ -126,6 +126,48 @@ export const DescriptionSchema = z.object({
 export type Description = z.infer<typeof DescriptionSchema>
 
 /**
+ * Categories of intra-file concerns the AI analyze pass can flag. Closed
+ * enum — we own the taxonomy so the UI can group/filter without parsing
+ * free-form strings, and so prompt drift can't silently introduce new
+ * buckets. Add a category here AND in the analyze system prompt; don't
+ * add only one.
+ *
+ * - `mixed-responsibilities` — file does multiple unrelated things
+ * - `misplaced-content`      — content doesn't match the classification
+ *                              (e.g. DB call in a route handler)
+ * - `hardcoded-domain-values` — magic strings/numbers that should be
+ *                              constants or config (role names, plan ids)
+ * - `long-inline-logic`      — a handler/function too long to keep inline;
+ *                              should be extracted to a domain function
+ * - `dead-or-stub-code`      — TODO-heavy, commented-out blocks,
+ *                              placeholder exports
+ * - `unclear-naming`         — names that actively mislead (`utils.ts`
+ *                              full of DB queries, "helper" load-bearing)
+ * - `other`                  — escape hatch; concerns that don't fit
+ */
+export const ConcernCategorySchema = z.enum([
+	"mixed-responsibilities",
+	"misplaced-content",
+	"hardcoded-domain-values",
+	"long-inline-logic",
+	"dead-or-stub-code",
+	"unclear-naming",
+	"other"
+])
+export type ConcernCategory = z.infer<typeof ConcernCategorySchema>
+
+/**
+ * A single concern the AI noticed in a file. The category drives UI
+ * grouping/filtering; the message is the human-readable one-liner shown
+ * in the issue card.
+ */
+export const ConcernSchema = z.object({
+	category: ConcernCategorySchema,
+	message: z.string().min(1).max(500)
+})
+export type Concern = z.infer<typeof ConcernSchema>
+
+/**
  * Cheap per-node metrics the parser emits. Populated for file nodes by
  * the TS parser today (`lineCount`, `exportCount`, `contentHash`); other
  * node kinds may leave it undefined. Audit rules read these to flag god
@@ -174,6 +216,14 @@ export const GraphNodeSchema = z.object({
 	 * description writes because those provenance paths don't go through AI.
 	 */
 	analyzedHash: z.string().min(1).optional(),
+	/**
+	 * Concerns the AI analyze pass flagged while reading this file's
+	 * content. Empty (or absent) means the file looked clean. The audit's
+	 * `aiReview` rule walks these to emit `ai-review` issues — count
+	 * determines severity (1→info, 2→warning, 3+→critical), Claude itself
+	 * does not assign severity.
+	 */
+	concerns: z.array(ConcernSchema).optional(),
 	/**
 	 * Canvas position, relative to parent if nested. Set by the user (intent
 	 * graph) or by a layout pass (parsed graphs). Optional — the parser emits
