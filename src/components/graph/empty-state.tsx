@@ -7,7 +7,7 @@ import { CrawlButton } from "@/components/graph/crawl-button"
  */
 export function GraphEmptyState({ projectId }: { projectId: string }) {
 	return (
-		<div className="flex h-screen w-full flex-col items-center justify-center gap-5 text-center">
+		<div className="flex h-full w-full flex-col items-center justify-center gap-5 text-center">
 			<div className="max-w-sm space-y-1.5">
 				<h2 className="font-display text-lg font-semibold">No graph yet</h2>
 				<p className="text-muted-foreground text-sm">

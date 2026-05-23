@@ -1,62 +1,37 @@
-import type { ReactNode } from "react"
-import { createFileRoute, Link } from "@tanstack/react-router"
-import { useQuery } from "@tanstack/react-query"
-import { GraphCanvas } from "@/components/graph/graph-canvas"
-import { GraphEmptyState } from "@/components/graph/empty-state"
+import { createFileRoute, Outlet } from "@tanstack/react-router"
+import { graphQueryOptions, projectQueryOptions } from "@/lib/queries"
 import { CrawlButton } from "@/components/graph/crawl-button"
-import { graphQueryOptions } from "@/lib/queries"
+import { ProjectSwitcher } from "@/components/layout/project-switcher"
 
 export const Route = createFileRoute("/projects/$projectId")({
-	component: GraphPage,
+	component: ProjectLayout,
 	loader: ({ context, params }) => {
-		// Fire-and-forget: warms the cache so the canvas paints without a fetch
-		// waterfall. `prefetchQuery` never rejects — load failures surface below.
+		// Warm both caches: the switcher reads the project list, both child
+		// routes read the graph. `prefetchQuery` never rejects — failures surface
+		// in the views below.
+		void context.queryClient.prefetchQuery(projectQueryOptions(params.projectId))
 		void context.queryClient.prefetchQuery(graphQueryOptions(params.projectId))
 	}
 })
 
-/** Full-screen centered message — the loading and error states share this frame. */
-function CenteredMessage({ children }: { children: ReactNode }) {
-	return (
-		<div className="text-muted-foreground flex h-screen items-center justify-center px-6 text-center text-sm">
-			{children}
-		</div>
-	)
-}
-
-function GraphPage() {
+/**
+ * Per-project layout — a header carrying the project switcher and the Crawl
+ * action, above the routed view. View selection (Dashboard / Graph) lives in
+ * the sidebar; this header switches *which* project and crawls it.
+ */
+function ProjectLayout() {
 	const { projectId } = Route.useParams()
-	const { data: graph, error, isLoading } = useQuery(graphQueryOptions(projectId))
-
-	if (isLoading) {
-		return <CenteredMessage>loading graph…</CenteredMessage>
-	}
-
-	if (error) {
-		return (
-			<CenteredMessage>
-				<span className="text-destructive">couldn&apos;t load the graph — {error.message}</span>
-			</CenteredMessage>
-		)
-	}
-
-	// Empty stored graph = never crawled. The graph is DB-backed and only a
-	// crawl populates it; we never parse on load.
-	if (!graph || graph.nodes.length === 0) {
-		return <GraphEmptyState projectId={projectId} />
-	}
 
 	return (
-		<div className="relative h-screen w-full">
-			<GraphCanvas graph={graph} />
-			<div className="absolute left-4 top-4 z-10 flex items-center gap-2">
-				<Link
-					to="/"
-					className="rounded-md border bg-card/80 px-3 py-1.5 text-xs font-medium backdrop-blur hover:bg-card"
-				>
-					← Projects
-				</Link>
-				<CrawlButton projectId={projectId} />
+		<div className="flex h-full flex-col">
+			<header className="flex shrink-0 items-center gap-3 border-b px-4 py-2">
+				<ProjectSwitcher projectId={projectId} />
+				<div className="ml-auto">
+					<CrawlButton projectId={projectId} />
+				</div>
+			</header>
+			<div className="min-h-0 flex-1">
+				<Outlet />
 			</div>
 		</div>
 	)
