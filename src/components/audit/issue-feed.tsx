@@ -108,6 +108,9 @@ function IssueCard({ issue }: { issue: Issue }) {
 					<p className="mt-1 truncate text-sm">{issue.title}</p>
 					<p className="text-muted-foreground mt-0.5 text-[11px]">
 						{issue.affected.length} affected file{issue.affected.length === 1 ? "" : "s"}
+						{issue.blastRadius
+							? ` · ${issue.blastRadius.upstream} dependent${issue.blastRadius.upstream === 1 ? "" : "s"}`
+							: ""}
 					</p>
 				</div>
 				{open ? (
@@ -148,6 +151,18 @@ function IssueCard({ issue }: { issue: Issue }) {
 									</li>
 								))}
 							</ul>
+						</div>
+					)}
+					{issue.blastRadius && (
+						<div className="space-y-1">
+							<p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide">
+								Blast radius
+							</p>
+							<div className="text-muted-foreground flex items-center gap-3 text-[11px]">
+								<span>{issue.blastRadius.upstream} upstream</span>
+								<span>{issue.blastRadius.downstream} downstream</span>
+								<span>{issue.blastRadius.modulesTouched} modules touched</span>
+							</div>
 						</div>
 					)}
 					<p className="text-muted-foreground text-[10px]">
