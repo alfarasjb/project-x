@@ -6,9 +6,12 @@
  * the path, the truncated contents, and — for modules — the list of
  * direct children.
  *
- * Keep the system prompt stable across calls — it's identical for every
- * file in a crawl, which is what makes the eventual prompt-caching win
- * possible. Per-file material goes in the user prompt only.
+ * Kept deliberately lean. We explored expanding the prompt to clear
+ * Anthropic's prompt-cache minimum (4,096 tokens for Haiku 4.5) but the
+ * tradeoff was wrong: padding a system prompt to chase a cache hit is
+ * paying for tokens we don't believe in. If we ever want to lean on the
+ * model more, enabling extended thinking is a better lever than bigger
+ * instructions.
  */
 
 export const ANALYZE_SYSTEM_PROMPT =

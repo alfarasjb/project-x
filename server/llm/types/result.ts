@@ -2,10 +2,6 @@
 export interface TokenUsage {
 	inputTokens: number
 	outputTokens: number
-	/** Tokens written into the prompt cache on this call (paid at ~1.25x normal). */
-	cacheCreationTokens?: number
-	/** Tokens served from the prompt cache on this call (paid at ~0.1x normal). */
-	cacheReadTokens?: number
 }
 
 /**

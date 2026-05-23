@@ -41,7 +41,7 @@ export class AnthropicAdapter extends BaseLlmAdapter {
 				model,
 				max_tokens: config.maxOutputTokens ?? DEFAULT_MAX_TOKENS,
 				...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
-				...buildSystem(config),
+				...(config.systemPrompt ? { system: config.systemPrompt } : {}),
 				messages: [{ role: "user", content: stringifyUserPrompt(config.userPrompt) }]
 			})
 
@@ -79,10 +79,7 @@ export class AnthropicAdapter extends BaseLlmAdapter {
 		const toolDef: Anthropic.Tool = {
 			name: tool.name,
 			description: tool.description,
-			input_schema: inputSchema,
-			// Marking the last tool entry as cacheable caches the entire tools
-			// array. Same threshold/silent-skip semantics as the system prompt.
-			...(config.cacheSystemPrompt ? { cache_control: { type: "ephemeral" } } : {})
+			input_schema: inputSchema
 		}
 
 		try {
@@ -90,7 +87,7 @@ export class AnthropicAdapter extends BaseLlmAdapter {
 				model,
 				max_tokens: config.maxOutputTokens ?? DEFAULT_MAX_TOKENS,
 				...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
-				...buildSystem(config),
+				...(config.systemPrompt ? { system: config.systemPrompt } : {}),
 				messages: [{ role: "user", content: stringifyUserPrompt(config.userPrompt) }],
 				tools: [toolDef],
 				tool_choice: { type: "tool", name: tool.name }
@@ -119,43 +116,11 @@ export class AnthropicAdapter extends BaseLlmAdapter {
 	}
 }
 
-/**
- * Surface Anthropic's per-call token counts in our provider-neutral shape.
- * `cache_creation_input_tokens` / `cache_read_input_tokens` are present only
- * when prompt caching took effect — we omit them otherwise so non-caching
- * callers don't see noisy zeros.
- */
+/** Surface Anthropic's per-call token counts in our provider-neutral shape. */
 function extractUsage(usage: Anthropic.Usage): TokenUsage {
 	return {
 		inputTokens: usage.input_tokens,
-		outputTokens: usage.output_tokens,
-		...(usage.cache_creation_input_tokens
-			? { cacheCreationTokens: usage.cache_creation_input_tokens }
-			: {}),
-		...(usage.cache_read_input_tokens ? { cacheReadTokens: usage.cache_read_input_tokens } : {})
-	}
-}
-
-/**
- * Build the `system` field for a Messages call. When `cacheSystemPrompt`
- * is set we send the structured block form so we can attach
- * `cache_control`; otherwise we pass the plain string the SDK accepts as a
- * shortcut. Returns an empty partial when no system prompt is provided so
- * the caller can spread it unconditionally.
- */
-function buildSystem(
-	config: LlmGenerationConfig
-): { system: string | Anthropic.TextBlockParam[] } | Record<string, never> {
-	if (!config.systemPrompt) return {}
-	if (!config.cacheSystemPrompt) return { system: config.systemPrompt }
-	return {
-		system: [
-			{
-				type: "text",
-				text: config.systemPrompt,
-				cache_control: { type: "ephemeral" }
-			}
-		]
+		outputTokens: usage.output_tokens
 	}
 }
 

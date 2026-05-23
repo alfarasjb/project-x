@@ -102,7 +102,8 @@ function mergePreservedFields(fresh: Graph, previous: Graph): Graph {
 			return {
 				...node,
 				...(prev.description !== undefined ? { description: prev.description } : {}),
-				...(prev.classification !== undefined ? { classification: prev.classification } : {})
+				...(prev.classification !== undefined ? { classification: prev.classification } : {}),
+				...(prev.analyzedHash !== undefined ? { analyzedHash: prev.analyzedHash } : {})
 			}
 		})
 	}
@@ -148,20 +149,21 @@ export async function crawlProject(project: Project): Promise<Graph> {
  * graph still saves, so partial-analyze is a recoverable state.
  */
 export async function analyzeProject(
-	project: Project
+	project: Project,
+	options?: { force?: boolean }
 ): Promise<{ graph: Graph; analyzed: number; skipped: number; failed: number }> {
 	const stored = await getProjectGraph(project.id)
 	const current = stored?.actual ?? null
 	if (!current || current.nodes.length === 0) {
 		throw new AppError(409, `Project "${project.slug}" has no graph — crawl it first.`)
 	}
-	const result = await analyzeGraph(current, current, project.rootPath)
+	const result = await analyzeGraph(current, project.rootPath, options)
 	const previousIssues = await getProjectIssues(project.id)
 	const issues = mergeIssueHistory(runAudit(result.graph), previousIssues)
 	await saveActualGraph(project.id, result.graph)
 	await saveProjectIssues(project.id, issues)
 	console.warn(
-		`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}`
+		`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}${options?.force ? " (forced)" : ""}`
 	)
 	return result
 }

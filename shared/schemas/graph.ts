@@ -166,6 +166,15 @@ export const GraphNodeSchema = z.object({
 	/** Docstring / summary. AI-inferred or authored. */
 	description: DescriptionSchema.optional(),
 	/**
+	 * The `metrics.contentHash` value at the moment the AI analyze pass last
+	 * wrote this node's `classification` + `description`. The analyze step
+	 * skips a node when its current `contentHash` still matches this — that's
+	 * the "don't re-analyze unchanged files" dedup. Preserved across crawls
+	 * by `mergePreservedFields`; cleared by `setNodeClassification`/manual
+	 * description writes because those provenance paths don't go through AI.
+	 */
+	analyzedHash: z.string().min(1).optional(),
+	/**
 	 * Canvas position, relative to parent if nested. Set by the user (intent
 	 * graph) or by a layout pass (parsed graphs). Optional — the parser emits
 	 * topology only; layout assigns positions before render.

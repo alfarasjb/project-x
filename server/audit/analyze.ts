@@ -33,38 +33,42 @@ const ANALYZE_TOOL = {
 		"Report the classification (role) and a short description for the file or module just read."
 }
 
-/** Cap on simultaneous in-flight LLM calls. Anthropic tier-1 limits are forgiving at 5. */
-const CONCURRENCY = 5
+/**
+ * Cap on simultaneous in-flight LLM calls. Anthropic tier-2+ handles this
+ * comfortably (a 423-node run sustained ~120 RPM without throttling); the
+ * BaseAdapter retries with backoff if a 429 lands.
+ */
+const CONCURRENCY = 10
 
 /**
  * Per-crawl analyze phase: walk the freshly-parsed graph, ask the LLM to
  * classify and describe every file/module that needs it, mutate the
  * returned graph nodes in place, and report how many calls were made.
  *
- * Skip rules (`shouldAnalyze`):
- *   - Skip if the node already has a manual description — the merge already
+ * Skip rules (`shouldAnalyze`) — all self-contained per node, no previous
+ * graph needed:
+ *   - Skip if the node already has a manual description — the merge
  *     preserved it, and AI never clobbers a human author.
- *   - Skip if the node has both classification + ai-source description AND
- *     its `contentHash` matches the previous crawl's hash. Re-crawl on an
- *     unchanged file ≈ 0 LLM calls.
- *   - Otherwise the node is analyzed (new file, content changed, or first
- *     crawl since classification was introduced).
+ *   - Skip if the node has classification + ai-source description AND its
+ *     current `metrics.contentHash` matches its stored `analyzedHash` (the
+ *     hash we last analyzed it at). Re-analyze on an unchanged file = 0
+ *     LLM calls.
+ *   - Otherwise analyze (new file, content changed since last analyze, or
+ *     first analyze ever).
  *
  * On per-node failure we log and leave the node as-is; we do NOT fail the
- * whole crawl. The next crawl will retry that node automatically.
+ * whole crawl. The next analyze run retries any unclassified nodes
+ * automatically.
  */
 export async function analyzeGraph(
 	graph: Graph,
-	previous: Graph | null,
-	rootPath: string
+	rootPath: string,
+	options?: { force?: boolean }
 ): Promise<{ graph: Graph; analyzed: number; skipped: number; failed: number }> {
-	const previousByPath = previous
-		? new Map(previous.nodes.map((node) => [node.path, node]))
-		: new Map<string, GraphNode>()
-
+	const force = options?.force ?? false
 	const toAnalyze = graph.nodes.filter((node) => {
 		if (node.kind !== "file" && node.kind !== "module") return false
-		return shouldAnalyze(node, previousByPath.get(node.path))
+		return shouldAnalyze(node, force)
 	})
 
 	const skipped =
@@ -80,23 +84,13 @@ export async function analyzeGraph(
 	let failed = 0
 	let inputTokens = 0
 	let outputTokens = 0
-	let cacheReadTokens = 0
-	let cacheCreationTokens = 0
 	await runWithConcurrency(toAnalyze, CONCURRENCY, async (node) => {
 		try {
 			const input = await readNodeInput(node, rootPath, childrenByParent)
 			if (!input) return
 			const userPrompt = buildAnalyzeUserPrompt(input)
 			const result = await adapter.generateStructured(
-				{
-					systemPrompt: ANALYZE_SYSTEM_PROMPT,
-					userPrompt,
-					// The same system prompt + tool definition fires on every node in
-					// the crawl, so caching is a clear win — first call pays the write,
-					// the rest read at 10%. Inert if the prompt is below the model's
-					// cache minimum (Haiku 4.5 ⇒ 2048 tokens); harmless either way.
-					cacheSystemPrompt: true
-				},
+				{ systemPrompt: ANALYZE_SYSTEM_PROMPT, userPrompt },
 				AnalyzeOutputSchema,
 				ANALYZE_TOOL
 			)
@@ -104,8 +98,6 @@ export async function analyzeGraph(
 			analyzed += 1
 			inputTokens += result.usage.inputTokens
 			outputTokens += result.usage.outputTokens
-			cacheReadTokens += result.usage.cacheReadTokens ?? 0
-			cacheCreationTokens += result.usage.cacheCreationTokens ?? 0
 		} catch (error) {
 			failed += 1
 			const message = error instanceof Error ? error.message : String(error)
@@ -113,27 +105,26 @@ export async function analyzeGraph(
 		}
 	})
 
-	console.warn(
-		`[analyze] tokens in=${inputTokens} out=${outputTokens} cache_read=${cacheReadTokens} cache_write=${cacheCreationTokens}`
-	)
+	console.warn(`[analyze] tokens in=${inputTokens} out=${outputTokens}`)
 
 	return { graph, analyzed, skipped, failed }
 }
 
-function shouldAnalyze(node: GraphNode, previous: GraphNode | undefined): boolean {
+function shouldAnalyze(node: GraphNode, force: boolean): boolean {
+	// Manual descriptions are user-authored and AI never clobbers them, even
+	// in force mode — that override is intentional and shouldn't be undone by
+	// "re-analyze everything."
 	if (node.description?.source === "manual") return false
+	if (force) return true
 	const hasClassification = node.classification !== undefined
 	const hasAiDescription = node.description !== undefined && node.description.source === "ai"
 	if (!hasClassification || !hasAiDescription) return true
-	// Module nodes don't carry a contentHash — they're cheap; analyze them when
-	// any direct child changed (proxy: if the file pass writes something fresh,
-	// the module that owns it gets re-analyzed too). For v1 the simpler rule
-	// "re-analyze modules every crawl" is fine since module count << file count.
-	if (node.kind === "module") return true
+	// Files hash their content; modules hash their sorted child paths (parser
+	// emits both). The skip rule is identical for both: current hash matches
+	// the hash we last analyzed at → skip.
 	const currentHash = node.metrics?.contentHash
-	const previousHash = previous?.metrics?.contentHash
-	if (!currentHash || !previousHash) return true
-	return currentHash !== previousHash
+	if (!currentHash || !node.analyzedHash) return true
+	return currentHash !== node.analyzedHash
 }
 
 function indexChildren(graph: Graph): Map<string, GraphNode[]> {
@@ -176,6 +167,13 @@ function applyAnalyzeResult(
 		what: output.description.what,
 		source: "ai",
 		...(output.description.why ? { why: output.description.why } : {})
+	}
+	// Stamp the hash we analyzed at — this is what `shouldAnalyze` reads next
+	// run to skip unchanged nodes. Both files (content hash) and modules
+	// (sorted-child-paths hash) carry one; the rare node without metrics
+	// (top-level "src", legacy crawls) stays unmarked and re-analyzes once.
+	if (node.metrics?.contentHash) {
+		node.analyzedHash = node.metrics.contentHash
 	}
 }
 

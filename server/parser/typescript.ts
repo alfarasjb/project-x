@@ -199,15 +199,37 @@ export async function parseTypeScript(rootPath: string): Promise<Graph> {
 		}
 	}
 
+	// Index direct children (files + sub-modules) per module so we can hash a
+	// module's structure. The hash lets the analyze pass skip modules whose
+	// children haven't changed — without it, every module re-analyzes on
+	// every run, which is what was burning ~25% of every analyze.
+	const moduleChildren = new Map<string, string[]>()
+	for (const file of fileNodes) {
+		if (!file.parentId) continue
+		const bucket = moduleChildren.get(file.parentId) ?? []
+		bucket.push(file.path)
+		moduleChildren.set(file.parentId, bucket)
+	}
+	for (const dir of moduleIds) {
+		const parent = posix.dirname(dir)
+		if (parent === "." || parent === "") continue
+		const bucket = moduleChildren.get(parent) ?? []
+		bucket.push(dir)
+		moduleChildren.set(parent, bucket)
+	}
+
 	const moduleNodes: GraphNode[] = [...moduleIds].map((dir) => {
 		const parent = posix.dirname(dir)
 		const layer = layerOf(dir)
+		const children = (moduleChildren.get(dir) ?? []).slice().sort()
+		const contentHash = createHash("sha256").update(children.join("\n")).digest("hex").slice(0, 16)
 		return {
 			id: dir,
 			path: dir,
 			kind: "module",
 			label: posix.basename(dir),
 			parentId: parent === "." ? null : parent,
+			metrics: { contentHash },
 			...(layer ? { layer } : {})
 		}
 	})
