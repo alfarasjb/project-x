@@ -5,6 +5,7 @@ import { apiRoutes } from "@shared/api-routes"
 import { ProjectSchema, type Project } from "@shared/schemas/project"
 import { apiPost } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
+import { routes } from "@/lib/routes"
 import { toast, toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
@@ -68,7 +69,7 @@ export function ProjectCard({ project, orgSlug }: { project: Project; orgSlug: s
 			</div>
 			{!isArchived && (
 				<Link
-					to="/$orgSlug/projects/$projectSlug"
+					to={routes.project}
 					params={{ orgSlug, projectSlug: project.slug }}
 					className="text-primary mt-3 inline-block text-xs font-medium underline-offset-4 hover:underline"
 				>

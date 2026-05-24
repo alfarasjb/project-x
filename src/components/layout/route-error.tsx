@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router"
+import { routes } from "@/lib/routes"
 import { errorMessage } from "@/lib/toast"
 
 /**
@@ -28,7 +29,7 @@ export function RouteErrorPage({ error }: { error: unknown }) {
 						Reload
 					</button>
 					<Link
-						to="/"
+						to={routes.home}
 						className="hover:bg-muted rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
 					>
 						Go home
@@ -68,7 +69,7 @@ export function RouteNotFoundPage() {
 				</div>
 				<div className="flex items-center justify-center gap-2">
 					<Link
-						to="/"
+						to={routes.home}
 						className="bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-90"
 					>
 						Go home

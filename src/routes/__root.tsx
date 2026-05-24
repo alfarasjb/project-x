@@ -4,6 +4,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
 import { Toaster } from "sonner"
 import type { QueryClient } from "@tanstack/react-query"
 import { orgsQueryOptions, sessionQueryOptions } from "@/lib/auth-queries"
+import { routes } from "@/lib/routes"
 import { AppShell } from "@/components/layout/app-shell"
 import { RouteErrorPage, RouteNotFoundPage } from "@/components/layout/route-error"
 
@@ -48,12 +49,12 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 
 		if (!session) {
 			if (isAnonymous) return
-			throw redirect({ to: "/signin" })
+			throw redirect({ to: routes.signin })
 		}
 
 		// Signed in — never let them sit on signin/signup.
 		if (isAnonymous) {
-			throw redirect({ to: "/" })
+			throw redirect({ to: routes.home })
 		}
 
 		// One source of truth for "do I have any orgs?" — cached so the
@@ -62,12 +63,12 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 
 		if (orgs.length === 0) {
 			if (isOnboarding) return
-			throw redirect({ to: "/onboarding" })
+			throw redirect({ to: routes.onboarding })
 		}
 
 		// Has orgs — onboarding is a dead-end for them.
 		if (isOnboarding) {
-			throw redirect({ to: "/" })
+			throw redirect({ to: routes.home })
 		}
 	}
 })

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { Check, ChevronsUpDown, Plus } from "lucide-react"
 import { projectsQueryOptions } from "@/lib/queries"
+import { routes } from "@/lib/routes"
 import { cn } from "@/lib/utils"
 
 /**
@@ -37,7 +38,7 @@ export function ProjectSwitcher({ orgSlug, projectId }: { orgSlug: string; proje
 						{projects?.map((project) => (
 							<Link
 								key={project.id}
-								to="/$orgSlug/projects/$projectSlug"
+								to={routes.project}
 								params={{ orgSlug, projectSlug: project.slug }}
 								onClick={() => setOpen(false)}
 								className="hover:bg-muted flex items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors"
@@ -53,7 +54,7 @@ export function ProjectSwitcher({ orgSlug, projectId }: { orgSlug: string; proje
 						))}
 						<div className="my-1 border-t" />
 						<Link
-							to="/$orgSlug/projects"
+							to={routes.projects}
 							params={{ orgSlug }}
 							onClick={() => setOpen(false)}
 							className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors"

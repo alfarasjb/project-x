@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router"
 import { authClient } from "@/lib/auth-client"
 import { orgsQueryOptions, sessionQueryOptions } from "@/lib/auth-queries"
 import { queryKeys } from "@/lib/query-keys"
+import { routes } from "@/lib/routes"
 
 export const Route = createFileRoute("/$orgSlug")({
 	component: OrgLayout,
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/$orgSlug")({
 	beforeLoad: async ({ context, params }) => {
 		const session = await context.queryClient.ensureQueryData(sessionQueryOptions)
 		// Root beforeLoad guarantees a session by this point; defensive null check.
-		if (!session) throw redirect({ to: "/signin" })
+		if (!session) throw redirect({ to: routes.signin })
 
 		const orgs = await context.queryClient.ensureQueryData(orgsQueryOptions)
 		const target = orgs.find((org) => org.slug === params.orgSlug)
@@ -28,9 +29,9 @@ export const Route = createFileRoute("/$orgSlug")({
 		if (!target) {
 			const fallback =
 				orgs.find((org) => org.id === session.session.activeOrganizationId) ?? orgs[0]
-			if (!fallback) throw redirect({ to: "/onboarding" })
+			if (!fallback) throw redirect({ to: routes.onboarding })
 			throw redirect({
-				to: "/$orgSlug/projects",
+				to: routes.projects,
 				params: { orgSlug: fallback.slug }
 			})
 		}

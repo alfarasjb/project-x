@@ -6,11 +6,12 @@ import { ProjectSchema } from "@shared/schemas/project"
 import { apiPost } from "@/lib/api"
 import { projectQueryOptions, projectsQueryOptions } from "@/lib/queries"
 import { queryKeys } from "@/lib/query-keys"
+import { routes } from "@/lib/routes"
 import { toast, toastError } from "@/lib/toast"
 import { Button } from "@/components/ui/button"
 
 // Parent does slug → id resolution; read the id from its loader data.
-const parentRoute = getRouteApi("/$orgSlug/projects/$projectSlug")
+const parentRoute = getRouteApi(routes.project)
 
 export const Route = createFileRoute("/$orgSlug/projects/$projectSlug/settings")({
 	component: SettingsRoute
@@ -64,7 +65,7 @@ function SettingsRoute() {
 
 	function handleBack(): void {
 		void navigate({
-			to: "/$orgSlug/projects/$projectSlug",
+			to: routes.project,
 			params: { orgSlug, projectSlug: project?.slug ?? "" }
 		})
 	}

@@ -6,6 +6,7 @@ import { apiRoutes } from "@shared/api-routes"
 import { ProjectSchema } from "@shared/schemas/project"
 import { apiPost } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
+import { routes } from "@/lib/routes"
 
 /**
  * Adds a project — name + an absolute path to a local repo. On success the new
@@ -24,7 +25,7 @@ export function NewProjectForm({ orgSlug }: { orgSlug: string }) {
 		onSuccess: (project) => {
 			void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
 			void navigate({
-				to: "/$orgSlug/projects/$projectSlug",
+				to: routes.project,
 				params: { orgSlug, projectSlug: project.slug }
 			})
 		}

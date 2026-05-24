@@ -4,6 +4,7 @@ import { LayoutDashboard, LogOut, Settings, Workflow } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { orgsQueryOptions } from "@/lib/auth-queries"
 import { queryKeys } from "@/lib/query-keys"
+import { routes } from "@/lib/routes"
 import { cn } from "@/lib/utils"
 
 const ITEM =
@@ -51,7 +52,7 @@ export function Sidebar() {
 		queryClient.removeQueries({ queryKey: queryKeys.auth.orgs() })
 		queryClient.removeQueries({ queryKey: queryKeys.projects.all })
 		queryClient.removeQueries({ queryKey: queryKeys.prefixes.project })
-		await navigate({ to: "/signin" })
+		await navigate({ to: routes.signin })
 	}
 
 	return (
@@ -67,7 +68,7 @@ export function Sidebar() {
 				{orgSlug && projectSlug ? (
 					<>
 						<Link
-							to="/$orgSlug/projects/$projectSlug"
+							to={routes.project}
 							params={{ orgSlug, projectSlug }}
 							activeOptions={{ exact: true }}
 							className={LINK}
@@ -75,19 +76,11 @@ export function Sidebar() {
 							<LayoutDashboard className="size-4 shrink-0" />
 							Dashboard
 						</Link>
-						<Link
-							to="/$orgSlug/projects/$projectSlug/graph"
-							params={{ orgSlug, projectSlug }}
-							className={LINK}
-						>
+						<Link to={routes.projectGraph} params={{ orgSlug, projectSlug }} className={LINK}>
 							<Workflow className="size-4 shrink-0" />
 							Graph
 						</Link>
-						<Link
-							to="/$orgSlug/projects/$projectSlug/settings"
-							params={{ orgSlug, projectSlug }}
-							className={LINK}
-						>
+						<Link to={routes.projectSettings} params={{ orgSlug, projectSlug }} className={LINK}>
 							<Settings className="size-4 shrink-0" />
 							Settings
 						</Link>

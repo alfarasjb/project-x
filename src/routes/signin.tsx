@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { authClient } from "@/lib/auth-client"
 import { queryKeys } from "@/lib/query-keys"
+import { routes } from "@/lib/routes"
 
 export const Route = createFileRoute("/signin")({
 	component: SignInPage
@@ -38,7 +39,7 @@ function SignInPage() {
 		// which returns cached data even when marked stale. We need the cache
 		// EMPTY so ensureQueryData is forced to fetch the post-signin session.
 		queryClient.removeQueries({ queryKey: queryKeys.auth.all })
-		await navigate({ to: "/" })
+		await navigate({ to: routes.home })
 	}
 
 	return (
@@ -48,7 +49,7 @@ function SignInPage() {
 			footer={
 				<>
 					New here?{" "}
-					<Link to="/signup" className="text-foreground hover:underline">
+					<Link to={routes.signup} className="text-foreground hover:underline">
 						Create an account
 					</Link>
 				</>

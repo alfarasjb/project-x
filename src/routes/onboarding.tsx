@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { authClient } from "@/lib/auth-client"
 import { queryKeys } from "@/lib/query-keys"
+import { routes } from "@/lib/routes"
 import { AuthShell } from "@/routes/signin"
 
 export const Route = createFileRoute("/onboarding")({
@@ -56,7 +57,7 @@ function OnboardingPage() {
 		// Navigate straight into the new workspace by its slug — `organization.create`
 		// already set it active server-side, so the org-slug gate will pass.
 		await navigate({
-			to: "/$orgSlug/projects",
+			to: routes.projects,
 			params: { orgSlug: result.data?.slug ?? newSlug }
 		})
 	}

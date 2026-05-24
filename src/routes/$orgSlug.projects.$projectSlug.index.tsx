@@ -6,10 +6,11 @@ import { IssueDetailPanel } from "@/components/audit/issue-detail-panel"
 import { IssueFeed } from "@/components/audit/issue-feed"
 import { IssueStats } from "@/components/audit/issue-stats"
 import { issuesQueryOptions } from "@/lib/queries"
+import { routes } from "@/lib/routes"
 
 // Parent route (`$orgSlug.projects.$projectSlug.tsx`) does the slug → id
 // resolution + caches the issues list. Read the resolved id from there.
-const parentRoute = getRouteApi("/$orgSlug/projects/$projectSlug")
+const parentRoute = getRouteApi(routes.project)
 
 export const Route = createFileRoute("/$orgSlug/projects/$projectSlug/")({
 	component: DashboardRoute

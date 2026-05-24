@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { authClient } from "@/lib/auth-client"
 import { queryKeys } from "@/lib/query-keys"
+import { routes } from "@/lib/routes"
 import { AuthShell } from "@/routes/signin"
 
 export const Route = createFileRoute("/signup")({
@@ -47,7 +48,7 @@ function SignUpPage() {
 		// Wipe (not invalidate) — ensureQueryData in beforeLoad returns stale
 		// data, so we need an empty cache for it to fetch the new session.
 		queryClient.removeQueries({ queryKey: queryKeys.auth.all })
-		await navigate({ to: "/" })
+		await navigate({ to: routes.home })
 	}
 
 	return (
@@ -57,7 +58,7 @@ function SignUpPage() {
 			footer={
 				<>
 					Already have an account?{" "}
-					<Link to="/signin" className="text-foreground hover:underline">
+					<Link to={routes.signin} className="text-foreground hover:underline">
 						Sign in
 					</Link>
 				</>

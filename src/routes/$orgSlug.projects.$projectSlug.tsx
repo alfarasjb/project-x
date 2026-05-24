@@ -9,6 +9,7 @@ import {
 } from "@/lib/queries"
 import { CrawlButton } from "@/components/graph/crawl-button"
 import { ProjectSwitcher } from "@/components/layout/project-switcher"
+import { routes } from "@/lib/routes"
 
 export const Route = createFileRoute("/$orgSlug/projects/$projectSlug")({
 	component: ProjectLayout,
@@ -48,7 +49,7 @@ function ProjectLayout() {
 		<div className="flex h-full flex-col">
 			<header className="flex shrink-0 items-center gap-3 border-b px-4 py-2">
 				<Link
-					to="/$orgSlug/projects"
+					to={routes.projects}
 					params={{ orgSlug }}
 					className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors"
 					title="Back to projects"
