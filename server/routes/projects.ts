@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { apiRoutePatterns } from "@shared/api-routes"
 import { CreateProjectSchema } from "@shared/schemas/project"
 import { AppError } from "@server/utils/errors"
 import { requireAuth } from "@server/auth-context"
@@ -18,19 +19,22 @@ import {
  * row and its crawled graph are kept and can be restored via `/:id/unarchive`.
  */
 export async function projectRoutes(app: FastifyInstance): Promise<void> {
-	app.get<{ Querystring: { archived?: string } }>("/api/projects", async (request) => {
-		const { organizationId } = await requireAuth(request)
-		return listProjects({ organizationId, archived: request.query.archived === "true" })
-	})
+	app.get<{ Querystring: { archived?: string } }>(
+		apiRoutePatterns.projectsList,
+		async (request) => {
+			const { organizationId } = await requireAuth(request)
+			return listProjects({ organizationId, archived: request.query.archived === "true" })
+		}
+	)
 
-	app.get<{ Params: { id: string } }>("/api/projects/:id", async (request) => {
+	app.get<{ Params: { id: string } }>(apiRoutePatterns.project, async (request) => {
 		const { organizationId } = await requireAuth(request)
 		const project = await getProjectForOrg(request.params.id, organizationId)
 		if (!project) throw new AppError(404, `Project not found: ${request.params.id}`)
 		return project
 	})
 
-	app.post("/api/projects", async (request) => {
+	app.post(apiRoutePatterns.projectsList, async (request) => {
 		const { organizationId } = await requireAuth(request)
 		const parsed = CreateProjectSchema.safeParse(request.body)
 		if (!parsed.success) {
@@ -39,14 +43,14 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
 		return createProject(parsed.data, organizationId)
 	})
 
-	app.post<{ Params: { id: string } }>("/api/projects/:id/archive", async (request) => {
+	app.post<{ Params: { id: string } }>(apiRoutePatterns.projectArchive, async (request) => {
 		const { organizationId } = await requireAuth(request)
 		const project = await archiveProject(request.params.id, organizationId)
 		if (!project) throw new AppError(404, `Project not found: ${request.params.id}`)
 		return project
 	})
 
-	app.post<{ Params: { id: string } }>("/api/projects/:id/unarchive", async (request) => {
+	app.post<{ Params: { id: string } }>(apiRoutePatterns.projectUnarchive, async (request) => {
 		const { organizationId } = await requireAuth(request)
 		const project = await unarchiveProject(request.params.id, organizationId)
 		if (!project) throw new AppError(404, `Project not found: ${request.params.id}`)

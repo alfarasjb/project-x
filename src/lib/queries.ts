@@ -1,17 +1,18 @@
 import { queryOptions } from "@tanstack/react-query"
 import { z } from "zod"
+import { apiRoutes } from "@shared/api-routes"
 import { GraphSchema } from "@shared/schemas/graph"
 import { IssuesSchema } from "@shared/schemas/issue"
 import { ProjectSchema } from "@shared/schemas/project"
 import { apiGet } from "./api"
+import { queryKeys } from "./query-keys"
 
 /**
  * Query definitions — one per server resource. Each returns a `queryOptions`
  * object usable from both a route loader (`prefetchQuery`) and a component
  * (`useQuery`), so the query key and fetcher are declared exactly once.
  *
- * Key convention: `["projects", …]` for lists, `["project", id, …]` for a
- * single project and anything scoped to it.
+ * Keys come from `query-keys.ts`; URLs come from `@shared/api-routes`.
  */
 
 const ProjectListSchema = z.array(ProjectSchema)
@@ -20,29 +21,32 @@ const ProjectListSchema = z.array(ProjectSchema)
 export const projectsQueryOptions = (opts?: { archived?: boolean }) => {
 	const archived = opts?.archived ?? false
 	return queryOptions({
-		queryKey: ["projects", archived ? "archived" : "active"],
+		queryKey: queryKeys.projects.list(archived ? "archived" : "active"),
 		queryFn: () =>
-			apiGet(archived ? "/api/projects?archived=true" : "/api/projects", ProjectListSchema)
+			apiGet(
+				archived ? `${apiRoutes.projectsList}?archived=true` : apiRoutes.projectsList,
+				ProjectListSchema
+			)
 	})
 }
 
 /** A single project's summary. */
 export const projectQueryOptions = (projectId: string) =>
 	queryOptions({
-		queryKey: ["project", projectId],
-		queryFn: () => apiGet(`/api/projects/${projectId}`, ProjectSchema)
+		queryKey: queryKeys.project.summary(projectId),
+		queryFn: () => apiGet(apiRoutes.project(projectId), ProjectSchema)
 	})
 
 /** A project's stored graph. A crawl overwrites this in the cache. */
 export const graphQueryOptions = (projectId: string) =>
 	queryOptions({
-		queryKey: ["project", projectId, "graph"],
-		queryFn: () => apiGet(`/api/projects/${projectId}/graph`, GraphSchema)
+		queryKey: queryKeys.project.graph(projectId),
+		queryFn: () => apiGet(apiRoutes.projectGraph(projectId), GraphSchema)
 	})
 
 /** A project's audit issues — written by every crawl, never edited directly. */
 export const issuesQueryOptions = (projectId: string) =>
 	queryOptions({
-		queryKey: ["project", projectId, "issues"],
-		queryFn: () => apiGet(`/api/projects/${projectId}/issues`, IssuesSchema)
+		queryKey: queryKeys.project.issues(projectId),
+		queryFn: () => apiGet(apiRoutes.projectIssues(projectId), IssuesSchema)
 	})

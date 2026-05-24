@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { RefreshCw } from "lucide-react"
+import { apiRoutes } from "@shared/api-routes"
 import { GraphSchema } from "@shared/schemas/graph"
 import { apiPost } from "@/lib/api"
 import { graphQueryOptions, issuesQueryOptions } from "@/lib/queries"
@@ -14,7 +15,7 @@ import { cn } from "@/lib/utils"
 export function CrawlButton({ projectId }: { projectId: string }) {
 	const queryClient = useQueryClient()
 	const { mutate, isPending, error } = useMutation({
-		mutationFn: () => apiPost(`/api/projects/${projectId}/graph/crawl`, GraphSchema),
+		mutationFn: () => apiPost(apiRoutes.projectCrawl(projectId), GraphSchema),
 		onSuccess: (graph) => {
 			queryClient.setQueryData(graphQueryOptions(projectId).queryKey, graph)
 			// The crawl also rewrote the audit issues — refetch them so the feed

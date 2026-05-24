@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { ChevronDown, RefreshCcw, Sparkles } from "lucide-react"
+import { apiRoutes } from "@shared/api-routes"
 import { AnalyzeResultSchema } from "@shared/schemas/graph"
 import { apiPost } from "@/lib/api"
 import { Button } from "@/components/ui/button"
@@ -36,7 +37,7 @@ export function AnalyzeButton({ projectId }: { projectId: string }) {
 	const queryClient = useQueryClient()
 	const { mutate, isPending, error, data } = useMutation({
 		mutationFn: (force: boolean) =>
-			apiPost(`/api/projects/${projectId}/analyze`, AnalyzeResultSchema, { force }),
+			apiPost(apiRoutes.projectAnalyze(projectId), AnalyzeResultSchema, { force }),
 		onSuccess: (result) => {
 			queryClient.setQueryData(graphQueryOptions(projectId).queryKey, result.graph)
 			void queryClient.invalidateQueries({ queryKey: issuesQueryOptions(projectId).queryKey })

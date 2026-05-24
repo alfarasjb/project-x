@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
+import { apiRoutePatterns } from "@shared/api-routes"
 import { EMPTY_GRAPH } from "@shared/schemas/graph"
 import { AppError } from "@server/utils/errors"
 import { requireAuth } from "@server/auth-context"
@@ -28,7 +29,7 @@ const AnalyzeBodySchema = z
  * node); it's user-triggered because it costs money.
  */
 export async function graphRoutes(app: FastifyInstance): Promise<void> {
-	app.get<{ Params: { id: string } }>("/api/projects/:id/graph", async (request) => {
+	app.get<{ Params: { id: string } }>(apiRoutePatterns.projectGraph, async (request) => {
 		const { organizationId } = await requireAuth(request)
 		const project = await getProjectForOrg(request.params.id, organizationId)
 		if (!project) throw new AppError(404, `Project not found: ${request.params.id}`)
@@ -36,7 +37,7 @@ export async function graphRoutes(app: FastifyInstance): Promise<void> {
 		return graph?.actual ?? EMPTY_GRAPH
 	})
 
-	app.post<{ Params: { id: string } }>("/api/projects/:id/graph/crawl", async (request) => {
+	app.post<{ Params: { id: string } }>(apiRoutePatterns.projectCrawl, async (request) => {
 		const { organizationId } = await requireAuth(request)
 		const project = await getProjectForOrg(request.params.id, organizationId)
 		if (!project) throw new AppError(404, `Project not found: ${request.params.id}`)
@@ -44,7 +45,7 @@ export async function graphRoutes(app: FastifyInstance): Promise<void> {
 	})
 
 	app.post<{ Params: { id: string }; Body: unknown }>(
-		"/api/projects/:id/analyze",
+		apiRoutePatterns.projectAnalyze,
 		async (request) => {
 			const { organizationId } = await requireAuth(request)
 			const project = await getProjectForOrg(request.params.id, organizationId)

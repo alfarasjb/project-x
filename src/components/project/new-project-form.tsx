@@ -2,8 +2,10 @@ import { useState, type FormEvent } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { Plus } from "lucide-react"
+import { apiRoutes } from "@shared/api-routes"
 import { ProjectSchema } from "@shared/schemas/project"
 import { apiPost } from "@/lib/api"
+import { queryKeys } from "@/lib/query-keys"
 
 /**
  * Adds a project — name + an absolute path to a local repo. On success the new
@@ -18,9 +20,9 @@ export function NewProjectForm({ orgSlug }: { orgSlug: string }) {
 	const navigate = useNavigate()
 
 	const { mutate, isPending, error } = useMutation({
-		mutationFn: () => apiPost("/api/projects", ProjectSchema, { name, rootPath }),
+		mutationFn: () => apiPost(apiRoutes.projectsList, ProjectSchema, { name, rootPath }),
 		onSuccess: (project) => {
-			void queryClient.invalidateQueries({ queryKey: ["projects"] })
+			void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
 			void navigate({
 				to: "/$orgSlug/projects/$projectId",
 				params: { orgSlug, projectId: project.id }

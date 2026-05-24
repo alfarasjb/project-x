@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react"
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { authClient } from "@/lib/auth-client"
+import { queryKeys } from "@/lib/query-keys"
 
 export const Route = createFileRoute("/signin")({
 	component: SignInPage
@@ -36,7 +37,7 @@ function SignInPage() {
 		// `removeQueries`, not `invalidate`: beforeLoad uses ensureQueryData,
 		// which returns cached data even when marked stale. We need the cache
 		// EMPTY so ensureQueryData is forced to fetch the post-signin session.
-		queryClient.removeQueries({ queryKey: ["auth"] })
+		queryClient.removeQueries({ queryKey: queryKeys.auth.all })
 		await navigate({ to: "/" })
 	}
 

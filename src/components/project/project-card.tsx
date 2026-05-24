@@ -1,8 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { Archive, ArchiveRestore, FolderGit2 } from "lucide-react"
+import { apiRoutes } from "@shared/api-routes"
 import { ProjectSchema, type Project } from "@shared/schemas/project"
 import { apiPost } from "@/lib/api"
+import { queryKeys } from "@/lib/query-keys"
 import { cn } from "@/lib/utils"
 
 /**
@@ -16,9 +18,12 @@ export function ProjectCard({ project, orgSlug }: { project: Project; orgSlug: s
 
 	const { mutate: toggleArchive, isPending } = useMutation({
 		mutationFn: () =>
-			apiPost(`/api/projects/${project.id}/${isArchived ? "unarchive" : "archive"}`, ProjectSchema),
+			apiPost(
+				isArchived ? apiRoutes.projectUnarchive(project.id) : apiRoutes.projectArchive(project.id),
+				ProjectSchema
+			),
 		onSuccess: () => {
-			void queryClient.invalidateQueries({ queryKey: ["projects"] })
+			void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
 		}
 	})
 

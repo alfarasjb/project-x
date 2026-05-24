@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { LayoutDashboard, LogOut, Workflow } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { orgsQueryOptions } from "@/lib/auth-queries"
+import { queryKeys } from "@/lib/query-keys"
 import { cn } from "@/lib/utils"
 
 const ITEM =
@@ -46,10 +47,10 @@ export function Sidebar() {
 		// cookieCache-stale getSession(). Setting the session query to null
 		// directly means the root beforeLoad sees "no session" immediately and
 		// lets the user through to /signin instead of bouncing them back to /.
-		queryClient.setQueryData(["auth", "session"], null)
-		queryClient.removeQueries({ queryKey: ["auth", "orgs"] })
-		queryClient.removeQueries({ queryKey: ["projects"] })
-		queryClient.removeQueries({ queryKey: ["project"] })
+		queryClient.setQueryData(queryKeys.auth.session(), null)
+		queryClient.removeQueries({ queryKey: queryKeys.auth.orgs() })
+		queryClient.removeQueries({ queryKey: queryKeys.projects.all })
+		queryClient.removeQueries({ queryKey: queryKeys.prefixes.project })
 		await navigate({ to: "/signin" })
 	}
 

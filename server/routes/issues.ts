@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify"
+import { apiRoutePatterns } from "@shared/api-routes"
 import { AppError } from "@server/utils/errors"
 import { requireAuth } from "@server/auth-context"
 import { getProjectIssues } from "@server/domain/graph"
@@ -10,7 +11,7 @@ import { getProjectForOrg } from "@server/domain/project"
  * is no per-issue write endpoint — issues are derived, not user-edited.
  */
 export async function issueRoutes(app: FastifyInstance): Promise<void> {
-	app.get<{ Params: { id: string } }>("/api/projects/:id/issues", async (request) => {
+	app.get<{ Params: { id: string } }>(apiRoutePatterns.projectIssues, async (request) => {
 		const { organizationId } = await requireAuth(request)
 		const project = await getProjectForOrg(request.params.id, organizationId)
 		if (!project) throw new AppError(404, `Project not found: ${request.params.id}`)

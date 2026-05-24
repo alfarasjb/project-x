@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router"
 import { authClient } from "@/lib/auth-client"
 import { orgsQueryOptions, sessionQueryOptions } from "@/lib/auth-queries"
+import { queryKeys } from "@/lib/query-keys"
 
 export const Route = createFileRoute("/$orgSlug")({
 	component: OrgLayout,
@@ -38,7 +39,7 @@ export const Route = createFileRoute("/$orgSlug")({
 			await authClient.organization.setActive({ organizationId: target.id })
 			// `removeQueries`, not `invalidate`: ensureQueryData returns stale
 			// data, so we wipe to force the next session read to fetch fresh.
-			context.queryClient.removeQueries({ queryKey: ["auth", "session"] })
+			context.queryClient.removeQueries({ queryKey: queryKeys.auth.session() })
 			await context.queryClient.ensureQueryData(sessionQueryOptions)
 		}
 	}

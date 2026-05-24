@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { authClient } from "@/lib/auth-client"
+import { queryKeys } from "@/lib/query-keys"
 import { AuthShell } from "@/routes/signin"
 
 export const Route = createFileRoute("/onboarding")({
@@ -51,7 +52,7 @@ function OnboardingPage() {
 		}
 		// Wipe both session AND orgs caches so beforeLoads re-fetch and see
 		// the new active org + the new entry in the org list.
-		queryClient.removeQueries({ queryKey: ["auth"] })
+		queryClient.removeQueries({ queryKey: queryKeys.auth.all })
 		// Navigate straight into the new workspace by its slug — `organization.create`
 		// already set it active server-side, so the org-slug gate will pass.
 		await navigate({
