@@ -51,6 +51,13 @@ const envSchema = z.object({
 	 */
 	ANTHROPIC_API_KEY: z.string().min(1).optional(),
 	/**
+	 * Voyage AI API key — required only for the embedding pipeline (used by
+	 * crawl/analyze to vectorize node descriptions for similarity search and
+	 * future RAG). Optional at boot so contributors without a key can still
+	 * run parse + analyze; embedding is skipped silently when unset.
+	 */
+	VOYAGE_API_KEY: z.string().min(1).optional(),
+	/**
 	 * Langfuse observability — optional. When BOTH keys are present, the OTel
 	 * bootstrap (`server/observability/tracing.ts`) registers a span processor
 	 * that ships every `observe()`-wrapped LLM call to Langfuse Cloud. Missing

@@ -1,13 +1,17 @@
 import { AnthropicAdapter } from "@server/llm/adapters/anthropic"
+import { VoyageAdapter } from "@server/llm/adapters/voyage"
 import { env } from "@server/env"
 import { FallbackLlmAdapter } from "@server/llm/fallback/adapter"
 import {
+	EMBEDDING_CHAINS,
 	FALLBACK_CHAINS,
 	TASK_CONFIGS,
 	type ChainEntry,
+	type EmbeddingChainEntry,
+	type EmbeddingOperation,
 	type Operation
 } from "@server/llm/fallback/chains"
-import type { LlmAdapter } from "@server/llm/types/adapter"
+import type { EmbeddingAdapter, LlmAdapter } from "@server/llm/types/adapter"
 import type { ObservabilityHook } from "@server/llm/types/observability"
 import { langfuseHook } from "@server/observability/langfuse-hook"
 
@@ -23,6 +27,8 @@ import { langfuseHook } from "@server/observability/langfuse-hook"
  */
 const adapterCache = new Map<Operation, LlmAdapter>()
 const providerCache = new Map<string, LlmAdapter>()
+const embeddingAdapterCache = new Map<EmbeddingOperation, EmbeddingAdapter>()
+const embeddingProviderCache = new Map<string, EmbeddingAdapter>()
 
 /** Get (or build) the adapter for an operation, wiring the configured chain. */
 export function getAdapter(operation: Operation): LlmAdapter {
@@ -68,6 +74,55 @@ function buildProviderAdapter(entry: ChainEntry): LlmAdapter {
 }
 
 /**
+ * Get (or build) the embedding adapter for an embedding operation. v1 has no
+ * fallback chain (one entry per operation), so this returns the underlying
+ * adapter directly rather than wrapping it — adding a `FallbackEmbeddingAdapter`
+ * is the right move when there's a second provider, not before.
+ */
+export function getEmbeddingAdapter(operation: EmbeddingOperation): EmbeddingAdapter {
+	const cached = embeddingAdapterCache.get(operation)
+	if (cached) return cached
+	const chain = EMBEDDING_CHAINS[operation]
+	const entry = chain[0]
+	if (!entry) {
+		throw new Error(`No embedding chain configured for operation "${operation}"`)
+	}
+	const adapter = getEmbeddingProviderAdapter(entry)
+	embeddingAdapterCache.set(operation, adapter)
+	return adapter
+}
+
+function getEmbeddingProviderAdapter(entry: EmbeddingChainEntry): EmbeddingAdapter {
+	const key = `${entry.provider}:${entry.model}:${entry.dimensions}`
+	const cached = embeddingProviderCache.get(key)
+	if (cached) return cached
+	const adapter = buildEmbeddingProviderAdapter(entry)
+	embeddingProviderCache.set(key, adapter)
+	return adapter
+}
+
+function buildEmbeddingProviderAdapter(entry: EmbeddingChainEntry): EmbeddingAdapter {
+	const observability = getObservabilityHook()
+	switch (entry.provider) {
+		case "voyage": {
+			if (!env.VOYAGE_API_KEY) {
+				throw new MissingProviderKeyError("voyage", "VOYAGE_API_KEY")
+			}
+			return new VoyageAdapter({
+				apiKey: env.VOYAGE_API_KEY,
+				defaultModel: entry.model,
+				dimensions: entry.dimensions,
+				observability
+			})
+		}
+		default: {
+			const exhaustive: never = entry.provider
+			throw new Error(`Unhandled embedding provider: ${exhaustive as string}`)
+		}
+	}
+}
+
+/**
  * Wire Langfuse only when its keys are configured. Without keys the tracing
  * bootstrap never registers a TracerProvider, so the hook's
  * `updateActiveObservation` calls would silently no-op anyway — but skipping
@@ -99,4 +154,6 @@ export class MissingProviderKeyError extends Error {
 export function clearAdapterCache(): void {
 	adapterCache.clear()
 	providerCache.clear()
+	embeddingAdapterCache.clear()
+	embeddingProviderCache.clear()
 }

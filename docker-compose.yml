@@ -11,7 +11,13 @@
 
 services:
   postgres:
-    image: postgres:18-alpine
+    # `pgvector/pgvector:pg18` is the upstream Postgres 18 image with the
+    # `vector` extension preinstalled — drop-in replacement for `postgres:18`
+    # since the data layout matches. Required for the node-embeddings table
+    # (HNSW indexes over voyage-code-3 embeddings). No volume wipe needed
+    # when migrating from `postgres:18-alpine`; just `CREATE EXTENSION vector`
+    # in the first migration that uses it.
+    image: pgvector/pgvector:pg18
     container_name: projectx-postgres
     restart: unless-stopped
     environment:

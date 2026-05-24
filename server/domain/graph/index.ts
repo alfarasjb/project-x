@@ -14,6 +14,7 @@ import { projects } from "@server/db/schema/projects"
 import { parseProject } from "@server/parser"
 import { analyzeGraph } from "@server/audit/analyze"
 import { runAudit, mergeIssueHistory } from "@server/audit/run"
+import { embedNodes } from "@server/domain/embeddings"
 import { AppError } from "@server/utils/errors"
 
 /**
@@ -184,11 +185,25 @@ export async function analyzeProject(
 			const issues = mergeIssueHistory(runAudit(result.graph), previousIssues)
 			await saveActualGraph(project.id, result.graph)
 			await saveProjectIssues(project.id, issues)
+			// Embed AFTER the graph is saved + descriptions exist. No-ops when
+			// VOYAGE_API_KEY is unset (same opt-in pattern as Anthropic).
+			// Failures don't roll back the analyze run — embeddings are a
+			// derived index, not source-of-truth state.
+			const embedResult = await embedNodes(project.id, result.graph).catch((error: unknown) => {
+				const message = error instanceof Error ? error.message : String(error)
+				console.warn(`[analyze] ${project.slug}: embed step failed (continuing): ${message}`)
+				return { embedded: 0, skipped: 0, failed: 0 }
+			})
 			console.warn(
-				`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}${options?.force ? " (forced)" : ""}`
+				`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}, embedded ${embedResult.embedded}${options?.force ? " (forced)" : ""}`
 			)
 			updateActiveObservation({
-				output: { analyzed: result.analyzed, skipped: result.skipped, failed: result.failed }
+				output: {
+					analyzed: result.analyzed,
+					skipped: result.skipped,
+					failed: result.failed,
+					embedded: embedResult.embedded
+				}
 			})
 			return result
 		},
