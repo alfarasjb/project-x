@@ -33,3 +33,15 @@ export const CreateProjectSchema = z.object({
 	rootPath: z.string().min(1, "Repository path is required")
 })
 export type CreateProject = z.infer<typeof CreateProjectSchema>
+
+/**
+ * POST /api/projects/:id/rename request body.
+ *
+ * Renames affect only the display `name`. The `slug` stays stable — it's
+ * what URLs / bookmarks / MCP `PROJECT_X_PROJECT` env var resolve against,
+ * and changing it on rename would silently break links.
+ */
+export const RenameProjectSchema = z.object({
+	name: z.string().min(1, "Name is required").max(120)
+})
+export type RenameProject = z.infer<typeof RenameProjectSchema>

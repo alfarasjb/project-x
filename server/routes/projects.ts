@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { apiRoutePatterns } from "@shared/api-routes"
-import { CreateProjectSchema } from "@shared/schemas/project"
+import { CreateProjectSchema, RenameProjectSchema } from "@shared/schemas/project"
 import { AppError } from "@server/utils/errors"
 import { requireAuth } from "@server/auth-context"
 import {
@@ -9,6 +9,7 @@ import {
 	createProject,
 	getProjectForOrg,
 	listProjects,
+	renameProject,
 	unarchiveProject
 } from "@server/domain/project"
 
@@ -53,6 +54,17 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
 	app.post<{ Params: { id: string } }>(apiRoutePatterns.projectUnarchive, async (request) => {
 		const { organizationId } = await requireAuth(request)
 		const project = await unarchiveProject(request.params.id, organizationId)
+		if (!project) throw new AppError(404, `Project not found: ${request.params.id}`)
+		return project
+	})
+
+	app.post<{ Params: { id: string } }>(apiRoutePatterns.projectRename, async (request) => {
+		const { organizationId } = await requireAuth(request)
+		const parsed = RenameProjectSchema.safeParse(request.body)
+		if (!parsed.success) {
+			throw new AppError(400, z.prettifyError(parsed.error))
+		}
+		const project = await renameProject(request.params.id, organizationId, parsed.data.name)
 		if (!project) throw new AppError(404, `Project not found: ${request.params.id}`)
 		return project
 	})

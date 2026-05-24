@@ -5,6 +5,8 @@ import { apiRoutes } from "@shared/api-routes"
 import { ProjectSchema, type Project } from "@shared/schemas/project"
 import { apiPost } from "@/lib/api"
 import { queryKeys } from "@/lib/query-keys"
+import { routes } from "@/lib/routes"
+import { toast, toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
 /**
@@ -24,7 +26,9 @@ export function ProjectCard({ project, orgSlug }: { project: Project; orgSlug: s
 			),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
-		}
+			toast.success(isArchived ? `Restored "${project.name}"` : `Archived "${project.name}"`)
+		},
+		onError: (error) => toastError(error, isArchived ? "Restore failed." : "Archive failed.")
 	})
 
 	return (
@@ -65,8 +69,8 @@ export function ProjectCard({ project, orgSlug }: { project: Project; orgSlug: s
 			</div>
 			{!isArchived && (
 				<Link
-					to="/$orgSlug/projects/$projectId"
-					params={{ orgSlug, projectId: project.id }}
+					to={routes.project}
+					params={{ orgSlug, projectSlug: project.slug }}
 					className="text-primary mt-3 inline-block text-xs font-medium underline-offset-4 hover:underline"
 				>
 					Open →

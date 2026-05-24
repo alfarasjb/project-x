@@ -1,17 +1,31 @@
-import { createFileRoute, Outlet } from "@tanstack/react-router"
+import { createFileRoute, Link, notFound, Outlet } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
-import { graphQueryOptions, projectQueryOptions } from "@/lib/queries"
+import { ArrowLeft } from "lucide-react"
+import {
+	graphQueryOptions,
+	issuesQueryOptions,
+	projectQueryOptions,
+	projectsQueryOptions
+} from "@/lib/queries"
 import { CrawlButton } from "@/components/graph/crawl-button"
 import { ProjectSwitcher } from "@/components/layout/project-switcher"
+import { routes } from "@/lib/routes"
 
-export const Route = createFileRoute("/$orgSlug/projects/$projectId")({
+export const Route = createFileRoute("/$orgSlug/projects/$projectSlug")({
 	component: ProjectLayout,
-	loader: ({ context, params }) => {
-		// Warm both caches: the switcher reads the project list, both child
-		// routes read the graph. `prefetchQuery` never rejects — failures surface
-		// in the views below.
-		void context.queryClient.prefetchQuery(projectQueryOptions(params.projectId))
-		void context.queryClient.prefetchQuery(graphQueryOptions(params.projectId))
+	loader: async ({ context, params }) => {
+		// Slug → id resolution happens here once, at the parent route. Child
+		// routes pull the resolved id via `getRouteApi(...).useLoaderData()` so
+		// the lookup isn't duplicated. Slugs are per-org and `projectsList`
+		// already scopes to the active org via the auth session.
+		const projects = await context.queryClient.ensureQueryData(projectsQueryOptions())
+		const project = projects.find((p) => p.slug === params.projectSlug)
+		if (!project) throw notFound()
+		// Warm the per-project caches by id — children render against these.
+		void context.queryClient.prefetchQuery(projectQueryOptions(project.id))
+		void context.queryClient.prefetchQuery(graphQueryOptions(project.id))
+		void context.queryClient.prefetchQuery(issuesQueryOptions(project.id))
+		return { projectId: project.id }
 	}
 })
 
@@ -21,7 +35,8 @@ export const Route = createFileRoute("/$orgSlug/projects/$projectId")({
  * routed view. View selection (Dashboard / Graph) lives in the sidebar.
  */
 function ProjectLayout() {
-	const { orgSlug, projectId } = Route.useParams()
+	const { orgSlug } = Route.useParams()
+	const { projectId } = Route.useLoaderData()
 	const { data: graph } = useQuery(graphQueryOptions(projectId))
 	const { data: project } = useQuery(projectQueryOptions(projectId))
 
@@ -33,6 +48,15 @@ function ProjectLayout() {
 	return (
 		<div className="flex h-full flex-col">
 			<header className="flex shrink-0 items-center gap-3 border-b px-4 py-2">
+				<Link
+					to={routes.projects}
+					params={{ orgSlug }}
+					className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors"
+					title="Back to projects"
+				>
+					<ArrowLeft className="size-3.5" />
+					<span className="hidden sm:inline">Projects</span>
+				</Link>
 				<ProjectSwitcher orgSlug={orgSlug} projectId={projectId} />
 				{hasGraph && (
 					<div className="text-muted-foreground hidden items-center gap-3 text-[11px] md:flex">

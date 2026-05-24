@@ -12,17 +12,18 @@ const uuidSchema = z.uuid()
 /**
  * Dev-only retrieval smoke-test.
  *
- *   pnpm similarity:check --project dummy-todo-app --text "save todos to localStorage"
- *   pnpm similarity:check --project dummy-todo-app --node src/lib/storage.ts
+ *   pnpm similarity:check --project <slug> --text "save todos to localStorage"
+ *   pnpm similarity:check --project <slug> --node src/lib/storage.ts
  *
- * Defaults to `--project dummy-todo-app`, `--k 5`. Either `--text` OR `--node`
- * is required (text → `findSimilarToText`, node → `findSimilarNodes`). Prints
- * the input + top-K matches with cosine distance + the description text so you
- * can eyeball "did retrieval pick the obvious neighbours."
+ * Pass `--project <slug>` for any project you've created + analyzed via the
+ * UI. Defaults to `--k 5`. Either `--text` OR `--node` is required (text →
+ * `findSimilarToText`, node → `findSimilarNodes`). Prints the input + top-K
+ * matches with cosine distance + the description text so you can eyeball
+ * "did retrieval pick the obvious neighbours."
  *
  * Picks the first project matching the slug across all orgs (slugs are
- * per-org but the seed sets the same slug everywhere). Use the slug shown by
- * `pnpm db:seed:dummy-project`.
+ * per-org and may collide if you've created the same-named project in
+ * multiple orgs — disambiguate by creating a uniquely-slugged project).
  */
 
 interface Args {
@@ -56,14 +57,14 @@ function parseArgs(): Args {
 			i++
 		}
 	}
-	if (!out.text && !out.nodeId) {
+	if (!out.projectSlug || (!out.text && !out.nodeId)) {
 		console.error(
 			"Usage: --project <slug> (--text <query> | --node <nodeId>) [--k 5] [--kinds file,module]"
 		)
 		process.exit(1)
 	}
 	return {
-		projectSlug: out.projectSlug ?? "dummy-todo-app",
+		projectSlug: out.projectSlug,
 		text: out.text,
 		nodeId: out.nodeId,
 		k: out.k ?? 5,

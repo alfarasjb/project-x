@@ -122,6 +122,27 @@ export async function createProject(
 	return project
 }
 
+/**
+ * Rename a project — updates `name` only; the `slug` stays stable so URLs
+ * and the MCP `PROJECT_X_PROJECT` binding don't break on rename. Returns
+ * the updated row, or null when the id is unknown / belongs to another org.
+ */
+// [JB]: Note: Later we will change this to UpdateProject instead of just rename. should take a json payload and is called when user hits "Save"
+export async function renameProject(
+	id: string,
+	organizationId: string,
+	name: string
+): Promise<Project | null> {
+	if (!uuid.safeParse(id).success) return null
+	const db = getDb()
+	const [project] = await db
+		.update(projects)
+		.set({ name, updatedAt: new Date().toISOString() })
+		.where(and(eq(projects.id, id), eq(projects.organizationId, organizationId)))
+		.returning(projectColumns)
+	return project ?? null
+}
+
 /** Soft-delete within an org: mark the project archived. Null for unknown / wrong-org id. */
 export async function archiveProject(id: string, organizationId: string): Promise<Project | null> {
 	if (!uuid.safeParse(id).success) return null

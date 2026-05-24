@@ -1,6 +1,0 @@
-{
-	"name": "dummy-todo-app",
-	"version": "0.0.0",
-	"private": true,
-	"description": "Tiny fixture project used to exercise Project X's crawl/analyze/embed pipeline without traversing the real repo. ~7 source files, ~12 graph nodes, deliberately contains a couple of intentional AI Review concerns."
-}

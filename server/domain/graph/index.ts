@@ -13,7 +13,7 @@ import { getDb } from "@server/db"
 import { projects } from "@server/db/schema/projects"
 import { parseProject } from "@server/parser"
 import { analyzeGraph } from "@server/audit/analyze"
-import { runAudit, mergeIssueHistory } from "@server/audit/run"
+import { runAudit, runSimilarityAudit, mergeIssueHistory } from "@server/audit/run"
 import { embedNodes } from "@server/domain/embeddings"
 import { AppError } from "@server/utils/errors"
 
@@ -133,7 +133,14 @@ export async function crawlProject(project: Project): Promise<Graph> {
 	const previous = await getProjectGraph(project.id)
 	const previousIssues = await getProjectIssues(project.id)
 	const merged = previous ? mergePreservedFields(fresh, previous.actual) : fresh
-	const issues = mergeIssueHistory(runAudit(merged), previousIssues)
+	// Duplicate-candidates are computed only at Analyze time (they need the
+	// pgvector index, which the cheap+fast crawl doesn't refresh). Carry the
+	// last analyze's findings forward so a crawl-without-analyze doesn't
+	// wipe them from the feed.
+	const carriedDuplicates = previousIssues.filter(
+		(issue) => issue.category === "duplicate-candidates"
+	)
+	const issues = mergeIssueHistory([...runAudit(merged), ...carriedDuplicates], previousIssues)
 	await saveActualGraph(project.id, merged)
 	await saveProjectIssues(project.id, issues)
 	return merged
@@ -182,9 +189,8 @@ export async function analyzeProject(
 			})
 			const result = await analyzeGraph(current, project.rootPath, options)
 			const previousIssues = await getProjectIssues(project.id)
-			const issues = mergeIssueHistory(runAudit(result.graph), previousIssues)
+			const heuristicIssues = runAudit(result.graph)
 			await saveActualGraph(project.id, result.graph)
-			await saveProjectIssues(project.id, issues)
 			// Embed AFTER the graph is saved + descriptions exist. No-ops when
 			// VOYAGE_API_KEY is unset (same opt-in pattern as Anthropic).
 			// Failures don't roll back the analyze run — embeddings are a
@@ -194,8 +200,24 @@ export async function analyzeProject(
 				console.warn(`[analyze] ${project.slug}: embed step failed (continuing): ${message}`)
 				return { embedded: 0, skipped: 0, failed: 0 }
 			})
+			// Similarity audit runs AFTER embed so the pgvector index it queries
+			// is fresh for this run. No-op when no nodes are embedded (e.g.
+			// VOYAGE_API_KEY unset, or first-ever analyze still in progress).
+			// Failures don't roll back the analyze run — heuristic issues + the
+			// saved graph are independently useful.
+			const similarityIssues = await runSimilarityAudit(project.id, result.graph).catch(
+				(error: unknown) => {
+					const message = error instanceof Error ? error.message : String(error)
+					console.warn(
+						`[analyze] ${project.slug}: similarity audit failed (continuing): ${message}`
+					)
+					return [] as Issue[]
+				}
+			)
+			const issues = mergeIssueHistory([...heuristicIssues, ...similarityIssues], previousIssues)
+			await saveProjectIssues(project.id, issues)
 			console.warn(
-				`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}, embedded ${embedResult.embedded} (embed skipped ${embedResult.skipped}, failed ${embedResult.failed})${options?.force ? " (forced)" : ""}`
+				`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}, embedded ${embedResult.embedded} (embed skipped ${embedResult.skipped}, failed ${embedResult.failed}), duplicate-candidates ${similarityIssues.length}${options?.force ? " (forced)" : ""}`
 			)
 			updateActiveObservation({
 				output: {
