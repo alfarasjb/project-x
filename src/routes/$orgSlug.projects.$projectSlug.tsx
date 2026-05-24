@@ -1,5 +1,6 @@
-import { createFileRoute, notFound, Outlet } from "@tanstack/react-router"
+import { createFileRoute, Link, notFound, Outlet } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
+import { ArrowLeft } from "lucide-react"
 import {
 	graphQueryOptions,
 	issuesQueryOptions,
@@ -46,6 +47,15 @@ function ProjectLayout() {
 	return (
 		<div className="flex h-full flex-col">
 			<header className="flex shrink-0 items-center gap-3 border-b px-4 py-2">
+				<Link
+					to="/$orgSlug/projects"
+					params={{ orgSlug }}
+					className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium transition-colors"
+					title="Back to projects"
+				>
+					<ArrowLeft className="size-3.5" />
+					<span className="hidden sm:inline">Projects</span>
+				</Link>
 				<ProjectSwitcher orgSlug={orgSlug} projectId={projectId} />
 				{hasGraph && (
 					<div className="text-muted-foreground hidden items-center gap-3 text-[11px] md:flex">
