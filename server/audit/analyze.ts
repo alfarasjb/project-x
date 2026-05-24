@@ -11,17 +11,13 @@ import {
 	type NodeClassification
 } from "@shared/schemas/graph"
 import { getAdapter } from "@server/llm/fallback/factory"
+import type { GenerationResult } from "@server/llm/types/result"
 import {
 	ANALYZE_SYSTEM_PROMPT,
 	buildAnalyzeUserPrompt,
 	type AnalyzeFileInput
 } from "@server/audit/analyze-prompt"
 
-/**
- * Schema the LLM is forced into via Anthropic tool_use. Mirrors the
- * existing `description` shape minus `source` (we set that ourselves —
- * the AI never claims its output is "manual").
- */
 /**
  * Output schema sent to Claude as the `analyze_node` tool's input_schema.
  *
@@ -35,18 +31,44 @@ import {
  * explicitly, but on clean files it sometimes interprets "empty if clean"
  * as "omit if clean" and drops it. Defaulting prevents that drift from
  * burning a retry without weakening the prompt's intent.
+ *
+ * Exported so the eval runner can re-use the same schema when grading
+ * model outputs against a golden set — eval and production share the
+ * contract.
  */
-const AnalyzeOutputSchema = z.object({
+export const AnalyzeOutputSchema = z.object({
 	classification: NodeClassificationSchema,
 	summary: z.string().min(1).max(2000),
 	rationale: z.string().min(1).max(2000).optional(),
 	concerns: z.array(ConcernSchema).max(5).default([])
 })
 
+export type AnalyzeOutput = z.infer<typeof AnalyzeOutputSchema>
+
 const ANALYZE_TOOL = {
 	name: "analyze_node",
 	description:
 		"Report the classification (role) and a short description for the file or module just read."
+}
+
+/**
+ * Pure per-node LLM call — no graph mutation, no skip logic, no FS read.
+ * The graph orchestration in `analyzeGraph` and the eval runner both
+ * funnel through here so a prompt/schema change can't drift between
+ * production and evals. Returns the full `GenerationResult` so callers
+ * who care about token usage (analyzeGraph's running totals) can read
+ * `.usage`; callers who only need the model output (evals) read `.content`.
+ */
+export async function analyzeNode(
+	input: AnalyzeFileInput
+): Promise<GenerationResult<AnalyzeOutput>> {
+	const adapter = getAdapter("analyze-node")
+	const userPrompt = buildAnalyzeUserPrompt(input)
+	return adapter.generateStructured(
+		{ systemPrompt: ANALYZE_SYSTEM_PROMPT, userPrompt },
+		AnalyzeOutputSchema,
+		ANALYZE_TOOL
+	)
 }
 
 /**
@@ -93,7 +115,6 @@ export async function analyzeGraph(
 		return { graph, analyzed: 0, skipped, failed: 0 }
 	}
 
-	const adapter = getAdapter("analyze-node")
 	const childrenByParent = indexChildren(graph)
 
 	let analyzed = 0
@@ -114,12 +135,7 @@ export async function analyzeGraph(
 				try {
 					const input = await readNodeInput(node, rootPath, childrenByParent)
 					if (!input) return
-					const userPrompt = buildAnalyzeUserPrompt(input)
-					const result = await adapter.generateStructured(
-						{ systemPrompt: ANALYZE_SYSTEM_PROMPT, userPrompt },
-						AnalyzeOutputSchema,
-						ANALYZE_TOOL
-					)
+					const result = await analyzeNode(input)
 					applyAnalyzeResult(node, result.content)
 					analyzed += 1
 					inputTokens += result.usage.inputTokens
