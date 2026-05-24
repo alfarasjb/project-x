@@ -49,7 +49,19 @@ const envSchema = z.object({
 	 * (parse, crawl, heuristic audit). The /analyze route returns a clear 4xx
 	 * when this is unset; nothing else cares.
 	 */
-	ANTHROPIC_API_KEY: z.string().min(1).optional()
+	ANTHROPIC_API_KEY: z.string().min(1).optional(),
+	/**
+	 * Langfuse observability — optional. When BOTH keys are present, the OTel
+	 * bootstrap (`server/observability/tracing.ts`) registers a span processor
+	 * that ships every `observe()`-wrapped LLM call to Langfuse Cloud. Missing
+	 * either key = telemetry silently no-ops; the app works identically.
+	 */
+	LANGFUSE_PUBLIC_KEY: z.string().min(1).optional(),
+	LANGFUSE_SECRET_KEY: z.string().min(1).optional(),
+	/** Self-hosted Langfuse URL; defaults to cloud. */
+	LANGFUSE_BASE_URL: z.url().default("https://cloud.langfuse.com"),
+	/** Tag traces with this string in Langfuse (e.g. "development", "production"). */
+	LANGFUSE_ENVIRONMENT: z.string().min(1).default("development")
 })
 
 const parsed = envSchema.safeParse(process.env)

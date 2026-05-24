@@ -1,3 +1,7 @@
+// Tracing first — registers the OpenTelemetry TracerProvider before any
+// `observe()` call from downstream imports runs. No-op when Langfuse env
+// vars are unset.
+import "@server/observability/tracing"
 import { env } from "@server/env"
 import Fastify from "fastify"
 import cors from "@fastify/cors"

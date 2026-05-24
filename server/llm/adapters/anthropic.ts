@@ -3,6 +3,7 @@ import { z } from "zod"
 import { BaseLlmAdapter } from "@server/llm/adapters/base"
 import { LlmError, LlmErrorType } from "@server/llm/errors/types"
 import type { AnthropicConfig, LlmGenerationConfig } from "@server/llm/types/config"
+import type { ObservabilityHook } from "@server/llm/types/observability"
 import type { GenerationResult, TokenUsage } from "@server/llm/types/result"
 
 const PROVIDER = "anthropic"
@@ -27,15 +28,18 @@ export class AnthropicAdapter extends BaseLlmAdapter {
 	readonly provider = PROVIDER
 	private readonly client: Anthropic
 	private readonly defaultModel: string
+	private readonly observability?: ObservabilityHook
 
 	constructor(config: AnthropicConfig) {
 		super()
 		this.client = new Anthropic({ apiKey: config.apiKey })
 		this.defaultModel = config.defaultModel
+		this.observability = config.observability
 	}
 
 	protected async callGenerate(config: LlmGenerationConfig): Promise<GenerationResult<string>> {
 		const model = config.model ?? this.defaultModel
+		this.observability?.onGenerationStart?.({ provider: PROVIDER, model, config })
 		try {
 			const response = await this.client.messages.create({
 				model,
@@ -54,14 +58,18 @@ export class AnthropicAdapter extends BaseLlmAdapter {
 				throw new LlmError(LlmErrorType.PARSING, PROVIDER, "Anthropic returned no text content")
 			}
 
-			return {
+			const result: GenerationResult<string> = {
 				content: text,
 				usage: extractUsage(response.usage),
 				provider: PROVIDER,
 				model
 			}
+			this.observability?.onGenerationComplete?.(result)
+			return result
 		} catch (error) {
-			throw mapAnthropicError(error)
+			const mapped = mapAnthropicError(error)
+			this.observability?.onGenerationError?.(mapped)
+			throw mapped
 		}
 	}
 
@@ -71,6 +79,12 @@ export class AnthropicAdapter extends BaseLlmAdapter {
 		tool: { name: string; description: string }
 	): Promise<GenerationResult<unknown>> {
 		const model = config.model ?? this.defaultModel
+		this.observability?.onGenerationStart?.({
+			provider: PROVIDER,
+			model,
+			config,
+			structuredTool: tool
+		})
 		// Cast: z.toJSONSchema returns a JSONSchema object, which is structurally
 		// compatible with Anthropic's `input_schema` (a JSON Schema dialect).
 		const inputSchema = z.toJSONSchema(schema, {
@@ -104,14 +118,18 @@ export class AnthropicAdapter extends BaseLlmAdapter {
 				)
 			}
 
-			return {
+			const result: GenerationResult<unknown> = {
 				content: toolUse.input,
 				usage: extractUsage(response.usage),
 				provider: PROVIDER,
 				model
 			}
+			this.observability?.onGenerationComplete?.(result)
+			return result
 		} catch (error) {
-			throw mapAnthropicError(error)
+			const mapped = mapAnthropicError(error)
+			this.observability?.onGenerationError?.(mapped)
+			throw mapped
 		}
 	}
 }
