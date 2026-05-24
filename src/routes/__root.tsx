@@ -1,9 +1,11 @@
 import { createRootRouteWithContext, Outlet, redirect, useLocation } from "@tanstack/react-router"
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools"
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
+import { Toaster } from "sonner"
 import type { QueryClient } from "@tanstack/react-query"
 import { orgsQueryOptions, sessionQueryOptions } from "@/lib/auth-queries"
 import { AppShell } from "@/components/layout/app-shell"
+import { RouteErrorPage, RouteNotFoundPage } from "@/components/layout/route-error"
 
 /** Router context — shared with every route loader. */
 export interface RouterContext {
@@ -28,6 +30,8 @@ const BARE_LAYOUT_ROUTES = new Set([...ANONYMOUS_ROUTES, ...NO_ORG_ROUTES])
 
 export const Route = createRootRouteWithContext<RouterContext>()({
 	component: RootLayout,
+	errorComponent: RouteErrorPage,
+	notFoundComponent: RouteNotFoundPage,
 	/**
 	 * Auth zone gate. Org-membership and active-org tracking happen in the
 	 * `/$orgSlug` layout — here we only decide which zone the user belongs in:
@@ -81,6 +85,8 @@ function RootLayout() {
 					<Outlet />
 				</AppShell>
 			)}
+			{/* Top-right to avoid colliding with the devtools buttons at the bottom corners in dev. */}
+			<Toaster position="top-right" closeButton richColors theme="system" />
 			{import.meta.env.DEV && (
 				<>
 					<TanStackRouterDevtools position="bottom-right" />
