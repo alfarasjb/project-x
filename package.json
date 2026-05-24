@@ -23,7 +23,6 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:seed": "tsx --tsconfig tsconfig.server.json server/db/seed.ts",
-		"db:seed:dummy-project": "tsx --tsconfig tsconfig.server.json server/db/seed-dummy-project.ts",
 		"db:studio": "drizzle-kit studio",
 		"prepare": "husky"
 	},
