@@ -30,6 +30,7 @@ interface EmbedNodesResult {
  */
 export async function embedNodes(projectId: string, graph: Graph): Promise<EmbedNodesResult> {
 	if (!env.VOYAGE_API_KEY) {
+		console.warn(`[embed] ${projectId}: skipped — VOYAGE_API_KEY not set`)
 		return { embedded: 0, skipped: 0, failed: 0 }
 	}
 

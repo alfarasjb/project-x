@@ -85,9 +85,6 @@ importers:
       ts-morph:
         specifier: ^28.0.0
         version: 28.0.0
-      voyageai:
-        specifier: ^0.2.1
-        version: 0.2.1
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -5052,18 +5049,6 @@ packages:
       }
     engines: { node: ">= 0.6" }
 
-  node-fetch@2.7.0:
-    resolution:
-      {
-        integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==
-      }
-    engines: { node: 4.x || >=6.0.0 }
-    peerDependencies:
-      encoding: ^0.1.0
-    peerDependenciesMeta:
-      encoding:
-        optional: true
-
   node-forge@1.4.0:
     resolution:
       {
@@ -5868,12 +5853,6 @@ packages:
       }
     engines: { node: ">=0.6" }
 
-  tr46@0.0.3:
-    resolution:
-      {
-        integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==
-      }
-
   tree-kill@1.2.2:
     resolution:
       {
@@ -6084,37 +6063,10 @@ packages:
       yaml:
         optional: true
 
-  voyageai@0.2.1:
-    resolution:
-      {
-        integrity: sha512-ym7Dk6p8Si6lR9wDh58EzxwT0ziD/pqXjzzzceOSySO3Ic3uosHZLOTAsb3Gq+1OaKdEMnni/p8TohKUNvLTkg==
-      }
-    engines: { node: ">=18.0.0" }
-    peerDependencies:
-      "@huggingface/transformers": ^3.8.0
-      onnxruntime-node: ">=1.17.0"
-    peerDependenciesMeta:
-      "@huggingface/transformers":
-        optional: true
-      onnxruntime-node:
-        optional: true
-
-  webidl-conversions@3.0.1:
-    resolution:
-      {
-        integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==
-      }
-
   webpack-virtual-modules@0.6.2:
     resolution:
       {
         integrity: sha512-66/V2i5hQanC51vBQKPH4aI8NMAcBW59FVBs+rC7eGHupMyfn34q7rZIE+ETlJ+XTevqfUhVVBgSUNSW2flEUQ==
-      }
-
-  whatwg-url@5.0.0:
-    resolution:
-      {
-        integrity: sha512-saE57nupxk6v3HY35+jzBwYa0rKSy0XR8JSxZPwgLr7ys0IBzhGviA1/TUGJLmSVqs8pb9AnvICXEuOHLprYTw==
       }
 
   which@2.0.2:
@@ -9356,10 +9308,6 @@ snapshots:
 
   negotiator@1.0.0: {}
 
-  node-fetch@2.7.0:
-    dependencies:
-      whatwg-url: 5.0.0
-
   node-forge@1.4.0: {}
 
   node-releases@2.0.45: {}
@@ -9877,8 +9825,6 @@ snapshots:
 
   toidentifier@1.0.1: {}
 
-  tr46@0.0.3: {}
-
   tree-kill@1.2.2: {}
 
   ts-algebra@2.0.0: {}
@@ -9983,20 +9929,7 @@ snapshots:
       tsx: 4.22.3
       yaml: 2.9.0
 
-  voyageai@0.2.1:
-    dependencies:
-      node-fetch: 2.7.0
-    transitivePeerDependencies:
-      - encoding
-
-  webidl-conversions@3.0.1: {}
-
   webpack-virtual-modules@0.6.2: {}
-
-  whatwg-url@5.0.0:
-    dependencies:
-      tr46: 0.0.3
-      webidl-conversions: 3.0.1
 
   which@2.0.2:
     dependencies:

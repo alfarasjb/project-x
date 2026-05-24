@@ -195,7 +195,7 @@ export async function analyzeProject(
 				return { embedded: 0, skipped: 0, failed: 0 }
 			})
 			console.warn(
-				`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}, embedded ${embedResult.embedded}${options?.force ? " (forced)" : ""}`
+				`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}, embedded ${embedResult.embedded} (embed skipped ${embedResult.skipped}, failed ${embedResult.failed})${options?.force ? " (forced)" : ""}`
 			)
 			updateActiveObservation({
 				output: {
