@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 import { posix } from "node:path"
 import { z } from "zod"
+import { observe, updateActiveObservation } from "@langfuse/tracing"
 import {
 	ConcernSchema,
 	NodeClassificationSchema,
@@ -100,24 +101,45 @@ export async function analyzeGraph(
 	let inputTokens = 0
 	let outputTokens = 0
 	await runWithConcurrency(toAnalyze, CONCURRENCY, async (node) => {
-		try {
-			const input = await readNodeInput(node, rootPath, childrenByParent)
-			if (!input) return
-			const userPrompt = buildAnalyzeUserPrompt(input)
-			const result = await adapter.generateStructured(
-				{ systemPrompt: ANALYZE_SYSTEM_PROMPT, userPrompt },
-				AnalyzeOutputSchema,
-				ANALYZE_TOOL
-			)
-			applyAnalyzeResult(node, result.content)
-			analyzed += 1
-			inputTokens += result.usage.inputTokens
-			outputTokens += result.usage.outputTokens
-		} catch (error) {
-			failed += 1
-			const message = error instanceof Error ? error.message : String(error)
-			console.warn(`[analyze] ${node.path} skipped after error: ${message}`)
-		}
+		// Per-node child span — sits under whatever root trace the caller
+		// opened (`analyze-project` from `analyzeProject`). The generation
+		// span created by the fallback adapter nests inside this one,
+		// giving the trace a 3-level shape: project → node → generation.
+		const traced = observe(
+			async () => {
+				updateActiveObservation({
+					input: { path: node.path, kind: node.kind },
+					metadata: { nodeId: node.id, nodeKind: node.kind, path: node.path }
+				})
+				try {
+					const input = await readNodeInput(node, rootPath, childrenByParent)
+					if (!input) return
+					const userPrompt = buildAnalyzeUserPrompt(input)
+					const result = await adapter.generateStructured(
+						{ systemPrompt: ANALYZE_SYSTEM_PROMPT, userPrompt },
+						AnalyzeOutputSchema,
+						ANALYZE_TOOL
+					)
+					applyAnalyzeResult(node, result.content)
+					analyzed += 1
+					inputTokens += result.usage.inputTokens
+					outputTokens += result.usage.outputTokens
+					updateActiveObservation({
+						output: {
+							classification: result.content.classification,
+							concernCount: result.content.concerns.length
+						}
+					})
+				} catch (error) {
+					failed += 1
+					const message = error instanceof Error ? error.message : String(error)
+					console.warn(`[analyze] ${node.path} skipped after error: ${message}`)
+					updateActiveObservation({ level: "ERROR", statusMessage: message })
+				}
+			},
+			{ name: `analyze-node ${node.path}`, asType: "span" }
+		)
+		await traced()
 	})
 
 	console.warn(`[analyze] tokens in=${inputTokens} out=${outputTokens}`)

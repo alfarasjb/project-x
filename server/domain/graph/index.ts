@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm"
+import { observe, updateActiveObservation } from "@langfuse/tracing"
 import {
 	GraphSchema,
 	type Description,
@@ -153,20 +154,47 @@ export async function analyzeProject(
 	project: Project,
 	options?: { force?: boolean }
 ): Promise<{ graph: Graph; analyzed: number; skipped: number; failed: number }> {
-	const stored = await getProjectGraph(project.id)
-	const current = stored?.actual ?? null
-	if (!current || current.nodes.length === 0) {
-		throw new AppError(409, `Project "${project.slug}" has no graph — crawl it first.`)
-	}
-	const result = await analyzeGraph(current, project.rootPath, options)
-	const previousIssues = await getProjectIssues(project.id)
-	const issues = mergeIssueHistory(runAudit(result.graph), previousIssues)
-	await saveActualGraph(project.id, result.graph)
-	await saveProjectIssues(project.id, issues)
-	console.warn(
-		`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}${options?.force ? " (forced)" : ""}`
+	// Root trace for the whole analyze run. Every per-node call inside
+	// `analyzeGraph` nests under this as `analyze-node <path>`, and each
+	// LLM attempt nests one level deeper as a generation span — so a
+	// single Langfuse trace shows the full project → node → generation
+	// hierarchy with rolled-up cost + token totals.
+	const traced = observe(
+		async () => {
+			const stored = await getProjectGraph(project.id)
+			const current = stored?.actual ?? null
+			if (!current || current.nodes.length === 0) {
+				throw new AppError(409, `Project "${project.slug}" has no graph — crawl it first.`)
+			}
+			updateActiveObservation({
+				input: {
+					project: project.slug,
+					nodes: current.nodes.length,
+					force: options?.force ?? false
+				},
+				metadata: {
+					projectId: project.id,
+					projectSlug: project.slug,
+					organizationId: project.organizationId,
+					force: options?.force ?? false
+				}
+			})
+			const result = await analyzeGraph(current, project.rootPath, options)
+			const previousIssues = await getProjectIssues(project.id)
+			const issues = mergeIssueHistory(runAudit(result.graph), previousIssues)
+			await saveActualGraph(project.id, result.graph)
+			await saveProjectIssues(project.id, issues)
+			console.warn(
+				`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}${options?.force ? " (forced)" : ""}`
+			)
+			updateActiveObservation({
+				output: { analyzed: result.analyzed, skipped: result.skipped, failed: result.failed }
+			})
+			return result
+		},
+		{ name: `analyze-project ${project.slug}`, asType: "span" }
 	)
-	return result
+	return traced()
 }
 
 /**

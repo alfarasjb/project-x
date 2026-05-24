@@ -8,6 +8,8 @@ import {
 	type Operation
 } from "@server/llm/fallback/chains"
 import type { LlmAdapter } from "@server/llm/types/adapter"
+import type { ObservabilityHook } from "@server/llm/types/observability"
+import { langfuseHook } from "@server/observability/langfuse-hook"
 
 /**
  * Per-operation adapter cache. Operations share underlying provider adapter
@@ -44,12 +46,17 @@ function getProviderAdapter(entry: ChainEntry): LlmAdapter {
 }
 
 function buildProviderAdapter(entry: ChainEntry): LlmAdapter {
+	const observability = getObservabilityHook()
 	switch (entry.provider) {
 		case "anthropic": {
 			if (!env.ANTHROPIC_API_KEY) {
 				throw new MissingProviderKeyError("anthropic", "ANTHROPIC_API_KEY")
 			}
-			return new AnthropicAdapter({ apiKey: env.ANTHROPIC_API_KEY, defaultModel: entry.model })
+			return new AnthropicAdapter({
+				apiKey: env.ANTHROPIC_API_KEY,
+				defaultModel: entry.model,
+				observability
+			})
 		}
 		default: {
 			// Exhaustive: `Provider` is `"anthropic"` today. The `never` makes adding
@@ -58,6 +65,18 @@ function buildProviderAdapter(entry: ChainEntry): LlmAdapter {
 			throw new Error(`Unhandled provider: ${exhaustive as string}`)
 		}
 	}
+}
+
+/**
+ * Wire Langfuse only when its keys are configured. Without keys the tracing
+ * bootstrap never registers a TracerProvider, so the hook's
+ * `updateActiveObservation` calls would silently no-op anyway — but skipping
+ * the hook entirely keeps the call stack clean and the adapter trivially
+ * inspectable.
+ */
+function getObservabilityHook(): ObservabilityHook | undefined {
+	if (!env.LANGFUSE_PUBLIC_KEY || !env.LANGFUSE_SECRET_KEY) return undefined
+	return langfuseHook
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { z } from "zod"
+import { observe } from "@langfuse/tracing"
 import type { LlmAdapter } from "@server/llm/types/adapter"
 import type { LlmGenerationConfig } from "@server/llm/types/config"
 import type { GenerationResult } from "@server/llm/types/result"
@@ -59,7 +60,16 @@ export class FallbackLlmAdapter implements LlmAdapter {
 			if (!link) continue
 			const isLast = i === this.chain.length - 1
 			try {
-				return await call(link.adapter, link.entry.model)
+				// Wrap each attempt in a Langfuse generation span. The adapter's
+				// observability hook (set via the factory) calls
+				// `updateActiveObservation` from inside this span to attach the
+				// input/output/usage. No span when Langfuse isn't configured —
+				// `observe()` is a passthrough when no TracerProvider is registered.
+				const attempt = observe(async () => call(link.adapter, link.entry.model), {
+					name: `${this.operation} (${link.entry.provider}/${link.entry.model})`,
+					asType: "generation"
+				})
+				return await attempt()
 			} catch (error) {
 				lastError = error
 				const normalized = normalizeLlmError(error, link.entry.provider)
