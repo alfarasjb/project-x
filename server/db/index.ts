@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js"
 import postgres from "postgres"
 import { env } from "@server/env"
 import { projects } from "@server/db/schema/projects"
+import { nodeEmbeddings } from "@server/db/schema/embeddings"
 import {
 	account,
 	invitation,
@@ -17,6 +18,7 @@ import {
 // in `public`; domain tables live in `projectx`. Both share one connection.
 const schema = {
 	projects,
+	nodeEmbeddings,
 	user,
 	session,
 	account,

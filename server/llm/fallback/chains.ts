@@ -45,3 +45,33 @@ export const TASK_CONFIGS: Record<Operation, TaskConfig> = {
 	// 1-2 sentence what + optional why).
 	"analyze-node": { temperature: 0.2, maxOutputTokens: 800 }
 }
+
+/**
+ * Embedding model registry — parallel to AI_MODELS, kept separate because
+ * embedding providers (Voyage) and chat providers (Anthropic) have no
+ * overlap in v1 and conflating them would force fake `provider: "voyage"`
+ * entries into the chat chains.
+ */
+export const EMBEDDING_MODELS = {
+	VOYAGE_CODE_3: "voyage-code-3"
+} as const
+
+export type EmbeddingProvider = "voyage"
+
+export type EmbeddingOperation = "embed-node"
+
+export interface EmbeddingChainEntry {
+	provider: EmbeddingProvider
+	model: string
+	/** Output vector dimensionality the adapter requests + the DB column expects. */
+	dimensions: number
+}
+
+/**
+ * One entry today — Voyage's `voyage-code-3` at the default 1024 dims. This
+ * shape leaves room for a future fallback (OpenAI text-embedding-3) without
+ * a refactor; for now we don't pay the cost of building one we won't use.
+ */
+export const EMBEDDING_CHAINS: Record<EmbeddingOperation, readonly EmbeddingChainEntry[]> = {
+	"embed-node": [{ provider: "voyage", model: EMBEDDING_MODELS.VOYAGE_CODE_3, dimensions: 1024 }]
+}
