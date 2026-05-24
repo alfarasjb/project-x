@@ -65,8 +65,8 @@ export function ProjectCard({ project, orgSlug }: { project: Project; orgSlug: s
 			</div>
 			{!isArchived && (
 				<Link
-					to="/$orgSlug/projects/$projectId"
-					params={{ orgSlug, projectId: project.id }}
+					to="/$orgSlug/projects/$projectSlug"
+					params={{ orgSlug, projectSlug: project.slug }}
 					className="text-primary mt-3 inline-block text-xs font-medium underline-offset-4 hover:underline"
 				>
 					Open →

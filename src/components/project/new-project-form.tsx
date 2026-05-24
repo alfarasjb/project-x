@@ -24,8 +24,8 @@ export function NewProjectForm({ orgSlug }: { orgSlug: string }) {
 		onSuccess: (project) => {
 			void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
 			void navigate({
-				to: "/$orgSlug/projects/$projectId",
-				params: { orgSlug, projectId: project.id }
+				to: "/$orgSlug/projects/$projectSlug",
+				params: { orgSlug, projectSlug: project.slug }
 			})
 		}
 	})

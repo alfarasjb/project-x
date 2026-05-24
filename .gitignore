@@ -22,3 +22,6 @@ drizzle/migrations/meta/_journal.json
 
 # Local session files — handoff notes, scratch. Not shared.
 .internal/
+
+# TanStack Router plugin cache.
+.tanstack/

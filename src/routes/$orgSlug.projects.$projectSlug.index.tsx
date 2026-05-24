@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, getRouteApi } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { GraphGuard } from "@/components/project/graph-guard"
 import { IssueDetailPanel } from "@/components/audit/issue-detail-panel"
@@ -7,12 +7,12 @@ import { IssueFeed } from "@/components/audit/issue-feed"
 import { IssueStats } from "@/components/audit/issue-stats"
 import { issuesQueryOptions } from "@/lib/queries"
 
-export const Route = createFileRoute("/$orgSlug/projects/$projectId/")({
-	component: DashboardRoute,
-	loader: ({ context, params }) => {
-		// Warm the issues cache so the feed renders without a flash.
-		void context.queryClient.prefetchQuery(issuesQueryOptions(params.projectId))
-	}
+// Parent route (`$orgSlug.projects.$projectSlug.tsx`) does the slug → id
+// resolution + caches the issues list. Read the resolved id from there.
+const parentRoute = getRouteApi("/$orgSlug/projects/$projectSlug")
+
+export const Route = createFileRoute("/$orgSlug/projects/$projectSlug/")({
+	component: DashboardRoute
 })
 
 /**
@@ -26,7 +26,7 @@ export const Route = createFileRoute("/$orgSlug/projects/$projectId/")({
  * picked or deselected.
  */
 function DashboardRoute() {
-	const { projectId } = Route.useParams()
+	const { projectId } = parentRoute.useLoaderData()
 	const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
 	const { data: issues } = useQuery(issuesQueryOptions(projectId))
 	const selectedIssue = selectedIssueId

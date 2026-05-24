@@ -24,9 +24,9 @@ const LINK = cn(
  * routes with no project (the org's `/$orgSlug/projects` browser).
  */
 export function Sidebar() {
-	// Loose params: `orgSlug` is set on any org-scoped route; `projectId`
+	// Loose params: `orgSlug` is set on any org-scoped route; `projectSlug`
 	// only on the project layout's children. Undefined on signin/onboarding.
-	const { orgSlug, projectId } = useParams({ strict: false })
+	const { orgSlug, projectSlug } = useParams({ strict: false })
 	const { data: session } = authClient.useSession()
 	// Use the cached org list rather than authClient.useActiveOrganization()
 	// so we always render the org named in the URL — switching the URL slug
@@ -64,11 +64,11 @@ export function Sidebar() {
 			</div>
 
 			<nav className="flex flex-1 flex-col gap-0.5 p-2">
-				{orgSlug && projectId ? (
+				{orgSlug && projectSlug ? (
 					<>
 						<Link
-							to="/$orgSlug/projects/$projectId"
-							params={{ orgSlug, projectId }}
+							to="/$orgSlug/projects/$projectSlug"
+							params={{ orgSlug, projectSlug }}
 							activeOptions={{ exact: true }}
 							className={LINK}
 						>
@@ -76,8 +76,8 @@ export function Sidebar() {
 							Dashboard
 						</Link>
 						<Link
-							to="/$orgSlug/projects/$projectId/graph"
-							params={{ orgSlug, projectId }}
+							to="/$orgSlug/projects/$projectSlug/graph"
+							params={{ orgSlug, projectSlug }}
 							className={LINK}
 						>
 							<Workflow className="size-4 shrink-0" />

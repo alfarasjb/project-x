@@ -37,8 +37,8 @@ export function ProjectSwitcher({ orgSlug, projectId }: { orgSlug: string; proje
 						{projects?.map((project) => (
 							<Link
 								key={project.id}
-								to="/$orgSlug/projects/$projectId"
-								params={{ orgSlug, projectId: project.id }}
+								to="/$orgSlug/projects/$projectSlug"
+								params={{ orgSlug, projectSlug: project.slug }}
 								onClick={() => setOpen(false)}
 								className="hover:bg-muted flex items-center gap-2 rounded px-2 py-1.5 text-xs transition-colors"
 							>
