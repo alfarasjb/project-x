@@ -14,6 +14,7 @@ import {
 	DialogTitle
 } from "@/components/ui/dialog"
 import { graphQueryOptions, issuesQueryOptions } from "@/lib/queries"
+import { toast, toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
 
 /**
@@ -35,13 +36,19 @@ export function AnalyzeButton({ projectId }: { projectId: string }) {
 	const [menuOpen, setMenuOpen] = useState(false)
 	const [confirmOpen, setConfirmOpen] = useState(false)
 	const queryClient = useQueryClient()
-	const { mutate, isPending, error, data } = useMutation({
+	// [JB]: Wrap this mutation in a hook.
+	const { mutate, isPending } = useMutation({
 		mutationFn: (force: boolean) =>
 			apiPost(apiRoutes.projectAnalyze(projectId), AnalyzeResultSchema, { force }),
 		onSuccess: (result) => {
 			queryClient.setQueryData(graphQueryOptions(projectId).queryKey, result.graph)
 			void queryClient.invalidateQueries({ queryKey: issuesQueryOptions(projectId).queryKey })
-		}
+			const parts = [`${result.analyzed} analyzed`]
+			if (result.skipped > 0) parts.push(`${result.skipped} skipped`)
+			if (result.failed > 0) parts.push(`${result.failed} failed`)
+			toast.success(`Analyze complete — ${parts.join(" · ")}.`)
+		},
+		onError: (error) => toastError(error, "Analyze failed.")
 	})
 
 	const openConfirm = (): void => {
@@ -104,18 +111,6 @@ export function AnalyzeButton({ projectId }: { projectId: string }) {
 					</>
 				)}
 			</div>
-
-			{error && (
-				<span className="text-destructive bg-card/80 max-w-64 rounded border px-2 py-1 text-right text-[11px] backdrop-blur">
-					analyze failed — {error.message}
-				</span>
-			)}
-			{!error && data && !isPending && (
-				<span className="text-muted-foreground text-[11px]">
-					{data.analyzed} analyzed · {data.skipped} skipped
-					{data.failed > 0 ? ` · ${data.failed} failed` : ""}
-				</span>
-			)}
 
 			<Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
 				<DialogContent>
