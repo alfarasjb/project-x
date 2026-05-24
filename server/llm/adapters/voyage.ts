@@ -117,7 +117,14 @@ export class VoyageAdapter implements EmbeddingAdapter {
 				provider: PROVIDER,
 				model,
 				dimensions: this.dimensions,
-				usage: { totalTokens: body.usage?.total_tokens }
+				// For embeddings there are no output tokens — Voyage's `total_tokens`
+				// IS the input count. Report it as both so Langfuse's cost engine
+				// (which multiplies `usageDetails.input` by the per-token price)
+				// gets a non-zero value once the model is registered in the UI.
+				usage: {
+					inputTokens: body.usage?.total_tokens,
+					totalTokens: body.usage?.total_tokens
+				}
 			})
 
 			return { embeddings, provider: PROVIDER, model, dimensions: this.dimensions }
