@@ -1,58 +1,50 @@
-import { useState, type FormEvent } from "react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { Plus } from "lucide-react"
-import { apiRoutes } from "@shared/api-routes"
-import { ProjectSchema } from "@shared/schemas/project"
-import { apiPost } from "@/lib/api"
-import { projectsQueryOptions } from "@/lib/queries"
-import { queryKeys } from "@/lib/query-keys"
+import { useCreateProject } from "@/hooks/use-create-project"
 import { routes } from "@/lib/routes"
+import { toastError } from "@/lib/toast"
 
 /**
- * Adds a project — name + an absolute path to a local repo. On success the new
- * project's dashboard opens (empty, awaiting a crawl). A bad path comes back
- * from the server as a 400 and is shown inline. `orgSlug` is the active
- * workspace's slug from the URL — every nav stays inside that workspace.
+ * Adds a project — name + an absolute path to a local repo. On success the
+ * new project's dashboard opens (empty, awaiting a crawl). A bad path comes
+ * back from the server as a 400 and is shown inline. `orgSlug` is the
+ * active workspace's slug from the URL — every nav stays inside that
+ * workspace.
+ *
+ * Mutation lives in `useCreateProject` — this component only wires UI
+ * concerns (form state, validation, navigation, error display).
  */
 export function NewProjectForm({ orgSlug }: { orgSlug: string }) {
 	const [name, setName] = useState("")
 	const [rootPath, setRootPath] = useState("")
-	const queryClient = useQueryClient()
 	const navigate = useNavigate()
 
-	const { mutate, isPending, error } = useMutation({
-		mutationFn: () =>
-			apiPost(apiRoutes.projectsList, ProjectSchema, {
-				source: "local" as const,
-				name,
-				rootPath
-			}),
-		onSuccess: (project) => {
-			// Seed the list cache so the project route's slug→id loader finds
-			// the new row immediately; `invalidateQueries` alone refetches
-			// lazily and loses the race with navigation → 404.
-			queryClient.setQueryData(projectsQueryOptions().queryKey, (prev) =>
-				prev ? [project, ...prev] : [project]
-			)
-			void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
-			void navigate({
-				to: routes.project,
-				params: { orgSlug, projectSlug: project.slug }
-			})
-		}
-	})
-
-	function handleSubmit(event: FormEvent) {
-		event.preventDefault()
-		if (name.trim() && rootPath.trim()) mutate()
-	}
+	const { mutate, isPending, error } = useCreateProject()
 
 	const inputClass =
 		"w-full rounded-md border bg-background px-3 py-1.5 text-sm outline-none transition-colors focus:border-foreground/30"
 
 	return (
-		<form onSubmit={handleSubmit} className="space-y-3">
+		<form
+			onSubmit={(event) => {
+				event.preventDefault()
+				if (!name.trim() || !rootPath.trim()) return
+				mutate(
+					{ source: "local", name, rootPath },
+					{
+						onSuccess: (project) => {
+							void navigate({
+								to: routes.project,
+								params: { orgSlug, projectSlug: project.slug }
+							})
+						},
+						onError: (cause) => toastError(cause, "Create failed.")
+					}
+				)
+			}}
+			className="space-y-3"
+		>
 			<div className="space-y-1">
 				<label className="text-xs font-medium" htmlFor="project-name">
 					Name

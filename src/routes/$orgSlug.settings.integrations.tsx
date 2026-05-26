@@ -1,18 +1,13 @@
 import { useState } from "react"
 import { createFileRoute } from "@tanstack/react-router"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { z } from "zod"
-import { apiRoutes } from "@shared/api-routes"
+import { useQuery } from "@tanstack/react-query"
 import { authClient } from "@/lib/auth-client"
 import { GitHubMark } from "@/components/icons/github-mark"
-import { apiPost } from "@/lib/api"
+import { useDisconnectGithub } from "@/hooks/use-disconnect-github"
 import { githubStatusQueryOptions } from "@/lib/queries"
-import { queryKeys } from "@/lib/query-keys"
 import { routes } from "@/lib/routes"
 import { toast, toastError } from "@/lib/toast"
 import { Button } from "@/components/ui/button"
-
-const DisconnectResultSchema = z.object({ disconnected: z.literal(true) })
 
 export const Route = createFileRoute("/$orgSlug/settings/integrations")({
 	component: IntegrationsTab,
@@ -63,7 +58,6 @@ interface GithubCardProps {
 const REQUIRED_SCOPE = "repo"
 
 function GithubCard({ orgSlug, configured, connected, login, scope }: GithubCardProps) {
-	const queryClient = useQueryClient()
 	const [linking, setLinking] = useState(false)
 
 	// Absolute URL against the browser origin (Vite in dev, app origin in
@@ -96,17 +90,13 @@ function GithubCard({ orgSlug, configured, connected, login, scope }: GithubCard
 		}
 	}
 
-	const { mutate: disconnect, isPending: disconnecting } = useMutation({
-		// Hits our endpoint (not better-auth's `unlinkAccount`) so the OAuth
-		// grant is revoked on GitHub's side too — otherwise the next Connect
-		// re-issues the OLD scope set without re-prompting.
-		mutationFn: () => apiPost(apiRoutes.integrationGithubDisconnect, DisconnectResultSchema),
-		onSuccess: () => {
-			void queryClient.invalidateQueries({ queryKey: queryKeys.integrations.github() })
-			toast.success("GitHub disconnected.")
-		},
-		onError: (error) => toastError(error, "Disconnect failed.")
-	})
+	const { mutate: disconnect, isPending: disconnecting } = useDisconnectGithub()
+	const handleDisconnect = (): void => {
+		disconnect(undefined, {
+			onSuccess: () => toast.success("GitHub disconnected."),
+			onError: (cause) => toastError(cause, "Disconnect failed.")
+		})
+	}
 
 	return (
 		<div className="bg-card space-y-3 rounded-xl border p-4">
@@ -160,7 +150,7 @@ function GithubCard({ orgSlug, configured, connected, login, scope }: GithubCard
 					<Button
 						type="button"
 						variant="outline"
-						onClick={() => disconnect()}
+						onClick={handleDisconnect}
 						disabled={disconnecting}
 					>
 						{disconnecting ? "Disconnecting…" : "Disconnect"}

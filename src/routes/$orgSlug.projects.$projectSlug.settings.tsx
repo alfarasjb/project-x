@@ -1,11 +1,8 @@
 import { useState } from "react"
 import { createFileRoute, getRouteApi, useNavigate } from "@tanstack/react-router"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { apiRoutes } from "@shared/api-routes"
-import { ProjectSchema } from "@shared/schemas/project"
-import { apiPost } from "@/lib/api"
-import { projectQueryOptions, projectsQueryOptions } from "@/lib/queries"
-import { queryKeys } from "@/lib/query-keys"
+import { useQuery } from "@tanstack/react-query"
+import { useRenameProject } from "@/hooks/use-rename-project"
+import { projectQueryOptions } from "@/lib/queries"
 import { routes } from "@/lib/routes"
 import { toast, toastError } from "@/lib/toast"
 import { Button } from "@/components/ui/button"
@@ -29,7 +26,6 @@ function SettingsRoute() {
 	const { projectId } = parentRoute.useLoaderData()
 	const { orgSlug } = parentRoute.useParams()
 	const navigate = useNavigate()
-	const queryClient = useQueryClient()
 	const { data: project } = useQuery(projectQueryOptions(projectId))
 	const [name, setName] = useState("")
 
@@ -38,30 +34,11 @@ function SettingsRoute() {
 	// an out-of-date project name.
 	const displayName = name === "" ? (project?.name ?? "") : name
 
-	const { mutate: rename, isPending: isRenaming } = useMutation({
-		mutationFn: (newName: string) =>
-			apiPost(apiRoutes.projectRename(projectId), ProjectSchema, { name: newName }),
-		onSuccess: (updated) => {
-			queryClient.setQueryData(projectQueryOptions(projectId).queryKey, updated)
-			// Invalidate the project list so the switcher + browser reflect the new name.
-			void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
-			// Also refresh the cached list this route binds slug → id against,
-			// so a fresh navigation resolves the same project.
-			void queryClient.invalidateQueries({ queryKey: projectsQueryOptions().queryKey })
-			toast.success(`Renamed to "${updated.name}".`)
-		},
-		onError: (error) => toastError(error, "Rename failed.")
-	})
+	const { mutate: rename, isPending: isRenaming } = useRenameProject(projectId)
 
 	const trimmed = displayName.trim()
 	const dirty = project ? trimmed !== project.name : false
 	const canSubmit = dirty && trimmed.length > 0 && !isRenaming
-
-	function handleSubmit(event: React.FormEvent): void {
-		event.preventDefault()
-		if (!canSubmit) return
-		rename(trimmed)
-	}
 
 	function handleBack(): void {
 		void navigate({
@@ -81,7 +58,17 @@ function SettingsRoute() {
 					</p>
 				</header>
 
-				<form onSubmit={handleSubmit} className="bg-card space-y-3 rounded-xl border p-4">
+				<form
+					onSubmit={(event) => {
+						event.preventDefault()
+						if (!canSubmit) return
+						rename(trimmed, {
+							onSuccess: (updated) => toast.success(`Renamed to "${updated.name}".`),
+							onError: (cause) => toastError(cause, "Rename failed.")
+						})
+					}}
+					className="bg-card space-y-3 rounded-xl border p-4"
+				>
 					<div className="space-y-1">
 						<label className="text-xs font-medium" htmlFor="project-name">
 							Name

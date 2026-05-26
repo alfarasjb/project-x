@@ -1,17 +1,10 @@
 import { useEffect, useMemo, useState } from "react"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { Lock, Search } from "lucide-react"
-import { apiRoutes } from "@shared/api-routes"
 import type { GithubRepo } from "@shared/schemas/integrations"
-import { ProjectSchema } from "@shared/schemas/project"
-import { apiPost } from "@/lib/api"
-import {
-	githubReposQueryOptions,
-	githubStatusQueryOptions,
-	projectsQueryOptions
-} from "@/lib/queries"
-import { queryKeys } from "@/lib/query-keys"
+import { useCreateProject } from "@/hooks/use-create-project"
+import { githubReposQueryOptions, githubStatusQueryOptions } from "@/lib/queries"
 import { routes } from "@/lib/routes"
 import { toast, toastError } from "@/lib/toast"
 import { Button } from "@/components/ui/button"
@@ -92,7 +85,6 @@ function RepoPicker({ orgSlug, onImported }: { orgSlug: string; onImported: () =
 	const [query, setQuery] = useState("")
 	const [accumulated, setAccumulated] = useState<GithubRepo[]>([])
 	const navigate = useNavigate()
-	const queryClient = useQueryClient()
 
 	const reposQuery = useQuery(githubReposQueryOptions(page))
 
@@ -119,31 +111,23 @@ function RepoPicker({ orgSlug, onImported }: { orgSlug: string; onImported: () =
 		)
 	}, [accumulated, query])
 
-	const { mutate: importRepo, isPending: importing } = useMutation({
-		mutationFn: (repo: GithubRepo) =>
-			apiPost(apiRoutes.projectsList, ProjectSchema, {
-				source: "github" as const,
-				name: repo.name,
-				repoUrl: repo.htmlUrl
-			}),
-		onSuccess: (project) => {
-			// Seed the active-list cache immediately so the project route's
-			// loader (which does slug→id via the cached list) finds the new row
-			// on navigation. `invalidateQueries` alone refetches lazily and the
-			// loader runs first — race → 404. setQueryData makes it synchronous.
-			queryClient.setQueryData(projectsQueryOptions().queryKey, (prev) =>
-				prev ? [project, ...prev] : [project]
-			)
-			void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
-			toast.success(`Imported "${project.name}".`)
-			onImported()
-			void navigate({
-				to: routes.project,
-				params: { orgSlug, projectSlug: project.slug }
-			})
-		},
-		onError: (error) => toastError(error, "Import failed.")
-	})
+	const { mutate: createProject, isPending: importing } = useCreateProject()
+	const importRepo = (repo: GithubRepo): void => {
+		createProject(
+			{ source: "github", name: repo.name, repoUrl: repo.htmlUrl },
+			{
+				onSuccess: (project) => {
+					toast.success(`Imported "${project.name}".`)
+					onImported()
+					void navigate({
+						to: routes.project,
+						params: { orgSlug, projectSlug: project.slug }
+					})
+				},
+				onError: (cause) => toastError(cause, "Import failed.")
+			}
+		)
+	}
 
 	const hasMore = reposQuery.data?.hasMore ?? false
 
