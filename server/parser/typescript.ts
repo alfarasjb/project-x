@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { existsSync } from "node:fs"
-import { posix } from "node:path"
+import { readdir } from "node:fs/promises"
+import { posix, sep as platformSep } from "node:path"
 import {
 	Node,
 	Project,
@@ -116,7 +117,63 @@ function layerOf(dir: string): NodeLayer | undefined {
 }
 
 /** Directories never worth parsing — dependencies, build output, VCS metadata. */
-const IGNORED_DIRS = ["node_modules", "dist", "build", "out", ".next", "coverage", ".git"]
+const IGNORED_DIRS = new Set(["node_modules", "dist", "build", "out", ".next", "coverage", ".git"])
+
+const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx"]
+
+/**
+ * Whether a directory entry name should be skipped during the recursive
+ * source walk. Matches the parser's "what counts as code" contract:
+ * `IGNORED_DIRS` (vendored / generated / VCS) and dot-files we don't want
+ * recursing into (`.git` is in IGNORED_DIRS but other dots like `.vscode`
+ * pass through unless flagged later).
+ */
+function isIgnoredDir(name: string): boolean {
+	return IGNORED_DIRS.has(name)
+}
+
+/**
+ * Decide whether a file should land in the source set. Mirrors the old glob:
+ * include `.ts/.tsx/.js/.jsx`, exclude `.d.ts` (declarations, no exports we
+ * track) and `*.gen.*` (generated, churn-only).
+ */
+function isSourceFile(name: string): boolean {
+	if (name.endsWith(".d.ts")) return false
+	if (/\.gen\./.test(name)) return false
+	return SOURCE_EXTENSIONS.some((ext) => name.endsWith(ext))
+}
+
+/**
+ * Recursively enumerate source files under `root`. Returns absolute paths
+ * (platform-native separators) so they pass straight to ts-morph's
+ * `addSourceFileAtPath`.
+ *
+ * We do this manually instead of relying on `addSourceFilesAtPaths`'
+ * glob support, which is fast-glob under the hood and falls over on
+ * Windows tmp paths shaped like `D:\TEMP\…` — the local-rootPath crawl
+ * works because the user's working dir doesn't trip the quirk, but a
+ * worker container with a different tmpdir layout returns zero files.
+ * A direct walk is path-shape-agnostic.
+ */
+async function walkSourceFiles(root: string): Promise<string[]> {
+	const out: string[] = []
+	const entries = await readdir(root, { recursive: true, withFileTypes: true })
+	for (const entry of entries) {
+		if (!entry.isFile()) continue
+		if (!isSourceFile(entry.name)) continue
+		// `parentPath` (Node 20+) is the directory the entry was found in,
+		// already including any recursion. Falls back to `path` on older Node.
+		const parent = entry.parentPath ?? (entry as unknown as { path: string }).path
+		// Bail out of ignored directories — the recursive walk descends into
+		// everything, so we filter by inspecting the parent path segments
+		// rather than the entry's own name (the entry IS a source file at
+		// this point).
+		const relative = parent.slice(root.length).split(platformSep)
+		if (relative.some((segment) => isIgnoredDir(segment))) continue
+		out.push(`${parent}${platformSep}${entry.name}`)
+	}
+	return out
+}
 
 /**
  * Locate the repo's own TypeScript config so ts-morph picks up its path
@@ -156,12 +213,10 @@ export async function parseTypeScript(rootPath: string): Promise<Graph> {
 		// ReactJSX + allowJs just guarantee .tsx and .js files load.
 		compilerOptions: { jsx: ts.JsxEmit.ReactJSX, allowJs: true }
 	})
-	project.addSourceFilesAtPaths([
-		`${root}/**/*.{ts,tsx,js,jsx}`,
-		`!${root}/**/*.d.ts`,
-		`!${root}/**/*.gen.*`,
-		...IGNORED_DIRS.map((dir) => `!${root}/**/${dir}/**`)
-	])
+	const sourcePaths = await walkSourceFiles(root)
+	for (const path of sourcePaths) {
+		project.addSourceFileAtPath(path)
+	}
 
 	const sourceFiles = project.getSourceFiles()
 	const relOf = (sf: SourceFile): string =>

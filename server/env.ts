@@ -80,7 +80,19 @@ const envSchema = z.object({
 	 * callback URL `${BETTER_AUTH_URL}/api/auth/callback/github`.
 	 */
 	GITHUB_CLIENT_ID: z.string().min(1).optional(),
-	GITHUB_CLIENT_SECRET: z.string().min(1).optional()
+	GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
+	/**
+	 * Trigger.dev — optional. Workers (background jobs) deploy to Trigger.dev
+	 * cloud; the Fastify server boots fine without these, but any code path
+	 * that calls `task.trigger()` needs `TRIGGER_SECRET_KEY` (the SDK reads it
+	 * from `process.env` directly at dispatch time).
+	 *
+	 * `TRIGGER_PROJECT_REF` mirrors the `project` ref hardcoded in
+	 * `trigger.config.ts` — the CLI reads from the config file, not env, so
+	 * this is purely for the server (e.g. building dashboard deep links).
+	 */
+	TRIGGER_SECRET_KEY: z.string().min(1).optional(),
+	TRIGGER_PROJECT_REF: z.string().min(1).optional()
 })
 
 const parsed = envSchema.safeParse(process.env)

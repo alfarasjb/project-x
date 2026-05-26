@@ -1,6 +1,9 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { ChevronDown, RefreshCcw, Sparkles } from "lucide-react"
 import { useAnalyzeProject } from "@/hooks/use-analyze-project"
+import { useTaskRunStatus } from "@/hooks/use-task-run-status"
+import { graphQueryOptions, issuesQueryOptions, projectQueryOptions } from "@/lib/queries"
 import { Button } from "@/components/ui/button"
 import {
 	Dialog,
@@ -18,28 +21,64 @@ import { cn } from "@/lib/utils"
  * file/module via Claude. Separate from Crawl because it costs money: a
  * user-controlled, dashboard-only action.
  *
- * Split-button shape: the primary click runs the cheap default (skip
- * unchanged files); the chevron opens a dropdown with the destructive
- * "Re-analyze all" option. That secondary action is still gated by a
- * confirm modal — users reach for "re-analyze" expecting refresh
- * semantics and find an LLM bill instead.
+ * Two code paths land here, same as CrawlButton:
  *
- * Lives in the IssueStats strip at the top of the dashboard. The dropdown
- * uses the same transparent click-catcher pattern as ProjectSwitcher
- * rather than installing shadcn's dropdown-menu — one fewer dep.
+ *   - **Local project** — Fastify runs the pass inline and returns the
+ *     result. Hook seeds the graph cache; we toast and stop.
+ *   - **GitHub project** — Fastify dispatches a Trigger.dev task and
+ *     returns `{ runId }`. We hold the runId, poll the task-run endpoint
+ *     every 2s, and on `completed` refetch graph + issues + project
+ *     before releasing — same anti-flicker pattern as crawl.
+ *
+ * Split-button shape: primary click runs the cheap default (skip
+ * unchanged); chevron opens a menu with "Re-analyze all" (force=true,
+ * gated by a confirm modal — users reach for re-analyze expecting
+ * refresh semantics and find an LLM bill instead).
+ *
+ * Dropdown uses the same transparent click-catcher pattern as
+ * ProjectSwitcher / AddProjectMenu rather than shadcn's dropdown-menu.
  */
 export function AnalyzeButton({ projectId }: { projectId: string }) {
 	const [menuOpen, setMenuOpen] = useState(false)
 	const [confirmOpen, setConfirmOpen] = useState(false)
+	const [runId, setRunId] = useState<string | null>(null)
+	const queryClient = useQueryClient()
 	const { mutate, isPending } = useAnalyzeProject(projectId)
+	const runStatus = useTaskRunStatus(runId)
+
+	// Consume the terminal poll. On success we *await the refetch* before
+	// clearing the runId — same anti-flicker pattern as crawl. The trigger
+	// task wrote new descriptions/classifications + similarity issues +
+	// `lastParsedAt`, so we refetch graph + issues + project.
+	useEffect(() => {
+		if (!runStatus.data) return
+		if (runStatus.data.status === "completed") {
+			void Promise.allSettled([
+				queryClient.refetchQueries({ queryKey: graphQueryOptions(projectId).queryKey }),
+				queryClient.refetchQueries({ queryKey: issuesQueryOptions(projectId).queryKey }),
+				queryClient.refetchQueries({ queryKey: projectQueryOptions(projectId).queryKey })
+			]).finally(() => {
+				setRunId(null)
+				toast.success("Analyze complete.")
+			})
+		} else if (runStatus.data.status === "failed") {
+			toastError(new Error(runStatus.data.error ?? "Analyze failed."), "Analyze failed.")
+			setRunId(null)
+		}
+	}, [runStatus.data, queryClient, projectId])
 
 	const runAnalyze = (force: boolean): void => {
 		mutate(force, {
-			onSuccess: (result) => {
-				const parts = [`${result.analyzed} analyzed`]
-				if (result.skipped > 0) parts.push(`${result.skipped} skipped`)
-				if (result.failed > 0) parts.push(`${result.failed} failed`)
-				toast.success(`Analyze complete — ${parts.join(" · ")}.`)
+			onSuccess: (response) => {
+				if (response.kind === "completed") {
+					const result = response.result
+					const parts = [`${result.analyzed} analyzed`]
+					if (result.skipped > 0) parts.push(`${result.skipped} skipped`)
+					if (result.failed > 0) parts.push(`${result.failed} failed`)
+					toast.success(`Analyze complete — ${parts.join(" · ")}.`)
+				} else {
+					setRunId(response.runId)
+				}
 			},
 			onError: (cause) => toastError(cause, "Analyze failed.")
 		})
@@ -55,22 +94,24 @@ export function AnalyzeButton({ projectId }: { projectId: string }) {
 		runAnalyze(true)
 	}
 
+	const isAnalyzing = isPending || runId !== null
+
 	return (
 		<div className="flex flex-col items-end gap-1">
 			<div className="relative inline-flex">
 				<button
 					type="button"
 					onClick={() => runAnalyze(false)}
-					disabled={isPending}
+					disabled={isAnalyzing}
 					className="bg-card/80 hover:bg-card flex items-center gap-1.5 rounded-l-md border border-r-0 px-3 py-1.5 text-xs font-medium backdrop-blur transition-colors disabled:cursor-not-allowed disabled:opacity-60"
 				>
-					<Sparkles className={cn("h-3.5 w-3.5", isPending && "animate-pulse")} />
-					{isPending ? "Analyzing…" : "Analyze"}
+					<Sparkles className={cn("h-3.5 w-3.5", isAnalyzing && "animate-pulse")} />
+					{isAnalyzing ? "Analyzing…" : "Analyze"}
 				</button>
 				<button
 					type="button"
 					onClick={() => setMenuOpen((value) => !value)}
-					disabled={isPending}
+					disabled={isAnalyzing}
 					aria-label="More analyze options"
 					aria-haspopup="menu"
 					aria-expanded={menuOpen}
