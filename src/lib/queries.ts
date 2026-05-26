@@ -4,6 +4,7 @@ import { apiRoutes } from "@shared/api-routes"
 import { GraphSchema } from "@shared/schemas/graph"
 import { IssuesSchema } from "@shared/schemas/issue"
 import { ProjectSchema } from "@shared/schemas/project"
+import { GithubReposSchema, GithubStatusSchema } from "@shared/schemas/integrations"
 import { apiGet } from "./api"
 import { queryKeys } from "./query-keys"
 
@@ -49,4 +50,18 @@ export const issuesQueryOptions = (projectId: string) =>
 	queryOptions({
 		queryKey: queryKeys.project.issues(projectId),
 		queryFn: () => apiGet(apiRoutes.projectIssues(projectId), IssuesSchema)
+	})
+
+/** Current user's GitHub integration status (configured / connected / login). */
+export const githubStatusQueryOptions = () =>
+	queryOptions({
+		queryKey: queryKeys.integrations.github(),
+		queryFn: () => apiGet(apiRoutes.integrationGithub, GithubStatusSchema)
+	})
+
+/** Page through the current user's GitHub repos for the import dialog. */
+export const githubReposQueryOptions = (page: number, perPage = 30) =>
+	queryOptions({
+		queryKey: queryKeys.integrations.githubRepos(page, perPage),
+		queryFn: () => apiGet(apiRoutes.integrationGithubRepos(page, perPage), GithubReposSchema)
 	})

@@ -62,6 +62,20 @@ interface AuthClient {
 	useSession(): { data: AuthSession | null; isPending: boolean }
 	useActiveOrganization(): { data: AuthOrganization | null; isPending: boolean }
 	getSession(): Promise<AuthResult<AuthSession>>
+	/**
+	 * Link a social provider to the currently signed-in user. Triggers a
+	 * redirect to the provider's OAuth consent; on success the browser is
+	 * sent to `callbackURL`. Pass `scopes` explicitly to force GitHub to
+	 * re-prompt for those scopes — the server-side default is applied at
+	 * sign-in but `linkSocial` won't escalate scopes on its own if the user
+	 * already linked with a narrower set.
+	 */
+	linkSocial(args: {
+		provider: "github"
+		callbackURL: string
+		scopes?: string[]
+	}): Promise<AuthResult>
+	unlinkAccount(args: { providerId: "github" }): Promise<AuthResult>
 	organization: {
 		list(): Promise<AuthResult<AuthOrganization[]>>
 		create(args: { name: string; slug: string }): Promise<AuthResult<AuthOrganization>>

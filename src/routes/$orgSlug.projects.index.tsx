@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { projectsQueryOptions } from "@/lib/queries"
-import { NewProjectForm } from "@/components/project/new-project-form"
+import { AddProjectMenu } from "@/components/project/add-project-menu"
 import { ProjectCard } from "@/components/project/project-card"
 
 export const Route = createFileRoute("/$orgSlug/projects/")({
@@ -14,10 +14,9 @@ export const Route = createFileRoute("/$orgSlug/projects/")({
 })
 
 /**
- * The signed-in home for an org — list active projects, offer the new-project
- * form, and a folded section for archived ones. The active-org gate in the
- * parent `$orgSlug` route guarantees server requests below resolve against
- * the right tenant.
+ * The signed-in home for an org — the project grid is the centerpiece;
+ * creation happens via a single dropdown CTA in the section header
+ * (Local / From GitHub). Archived projects fold below.
  */
 function ProjectsPage() {
 	const { orgSlug } = Route.useParams()
@@ -28,38 +27,40 @@ function ProjectsPage() {
 		enabled: showArchived
 	})
 
+	const hasProjects = Boolean(projects && projects.length > 0)
+
 	return (
 		<div className="h-full overflow-y-auto">
 			<div className="mx-auto w-full max-w-3xl px-6 py-12">
-				<header>
-					<h1 className="font-display text-3xl font-bold tracking-tight">Projects</h1>
-					<p className="text-muted-foreground mt-1 text-sm">
-						Pick a repo to map, or add a new one.
-					</p>
+				<header className="flex items-start justify-between gap-4">
+					<div>
+						<h1 className="font-display text-3xl font-bold tracking-tight">Projects</h1>
+						<p className="text-muted-foreground mt-1 text-sm">
+							Pick a repo to map, or add a new one.
+						</p>
+					</div>
+					<AddProjectMenu orgSlug={orgSlug} />
 				</header>
 
-				<section className="mt-8 space-y-3">
-					<h2 className="text-sm font-semibold">New project</h2>
-					<NewProjectForm orgSlug={orgSlug} />
-				</section>
-
-				<section className="mt-10 space-y-3">
-					<h2 className="text-sm font-semibold">Projects</h2>
-					{isLoading && <p className="text-muted-foreground text-sm">loading…</p>}
+				<section className="mt-8">
+					{isLoading && <p className="text-muted-foreground text-sm">Loading…</p>}
 					{error && <p className="text-destructive text-sm">{error.message}</p>}
-					{projects && projects.length === 0 && (
-						<p className="text-muted-foreground text-sm">No projects yet — add one above.</p>
+					{!isLoading && !error && !hasProjects && (
+						<div className="bg-card text-muted-foreground rounded-xl border border-dashed p-8 text-center text-sm">
+							No projects yet — use <span className="text-foreground font-medium">New project</span>{" "}
+							above to add one.
+						</div>
 					)}
-					{projects && projects.length > 0 && (
+					{hasProjects && (
 						<div className="grid gap-3 sm:grid-cols-2">
-							{projects.map((project) => (
+							{projects?.map((project) => (
 								<ProjectCard key={project.id} project={project} orgSlug={orgSlug} />
 							))}
 						</div>
 					)}
 				</section>
 
-				<section className="mt-8">
+				<section className="mt-10">
 					<button
 						type="button"
 						onClick={() => setShowArchived((open) => !open)}

@@ -20,7 +20,10 @@ export const apiRoutePatterns = {
 	projectGraph: "/api/projects/:id/graph",
 	projectCrawl: "/api/projects/:id/graph/crawl",
 	projectAnalyze: "/api/projects/:id/analyze",
-	projectIssues: "/api/projects/:id/issues"
+	projectIssues: "/api/projects/:id/issues",
+	integrationGithub: "/api/integrations/github",
+	integrationGithubDisconnect: "/api/integrations/github/disconnect",
+	integrationGithubRepos: "/api/integrations/github/repos"
 } as const
 
 export const apiRoutes = {
@@ -32,5 +35,9 @@ export const apiRoutes = {
 	projectGraph: (id: string) => `/api/projects/${id}/graph`,
 	projectCrawl: (id: string) => `/api/projects/${id}/graph/crawl`,
 	projectAnalyze: (id: string) => `/api/projects/${id}/analyze`,
-	projectIssues: (id: string) => `/api/projects/${id}/issues`
+	projectIssues: (id: string) => `/api/projects/${id}/issues`,
+	integrationGithub: "/api/integrations/github",
+	integrationGithubDisconnect: "/api/integrations/github/disconnect",
+	integrationGithubRepos: (page = 1, perPage = 30) =>
+		`/api/integrations/github/repos?page=${page}&per_page=${perPage}`
 } as const

@@ -129,6 +129,12 @@ function mergePreservedFields(fresh: Graph, previous: Graph): Graph {
  * action; see `analyzeProject`.
  */
 export async function crawlProject(project: Project): Promise<Graph> {
+	if (!project.rootPath) {
+		throw new AppError(
+			409,
+			`Project "${project.slug}" was imported from GitHub. Crawling GitHub-imported repos is not yet supported on this server — coming in the next release.`
+		)
+	}
 	const fresh = await parseProject(project.rootPath)
 	const previous = await getProjectGraph(project.id)
 	const previousIssues = await getProjectIssues(project.id)
@@ -187,6 +193,12 @@ export async function analyzeProject(
 					force: options?.force ?? false
 				}
 			})
+			if (!project.rootPath) {
+				throw new AppError(
+					409,
+					`Project "${project.slug}" was imported from GitHub. Analyzing GitHub-imported repos is not yet supported on this server — coming in the next release.`
+				)
+			}
 			const result = await analyzeGraph(current, project.rootPath, options)
 			const previousIssues = await getProjectIssues(project.id)
 			const heuristicIssues = runAudit(result.graph)

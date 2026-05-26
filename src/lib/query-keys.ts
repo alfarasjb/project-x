@@ -27,8 +27,15 @@ export const queryKeys = {
 		graph: (id: string) => [...queryKeys.project.all(id), "graph"] as const,
 		issues: (id: string) => [...queryKeys.project.all(id), "issues"] as const
 	},
+	integrations: {
+		all: ["integrations"] as const,
+		github: () => [...queryKeys.integrations.all, "github"] as const,
+		githubRepos: (page: number, perPage: number) =>
+			[...queryKeys.integrations.github(), "repos", page, perPage] as const
+	},
 	/** Cross-cutting prefixes — used by sign-out to clear the whole subtree. */
 	prefixes: {
-		project: ["project"] as const
+		project: ["project"] as const,
+		integrations: ["integrations"] as const
 	}
 } as const
