@@ -18,6 +18,22 @@ const GITHUB_PROVIDER_ID = "github"
 const GITHUB_API = "https://api.github.com"
 
 /**
+ * Read just the access token for a user's linked GitHub account, throwing
+ * a clean 409 if they're not connected. Used by server-side code that needs
+ * to act as the user against GitHub's API (e.g. the crawl task downloading
+ * a tarball). Distinct from `getGithubAccount` — that one returns `null`
+ * for missing links and is fine for status checks; this one is the
+ * "actually do work as this user" path that should fail loud.
+ */
+export async function getGithubAccessToken(userId: string): Promise<string> {
+	const link = await getGithubAccount(userId)
+	if (!link) {
+		throw new AppError(409, "GitHub is not connected. Connect it under Settings → Integrations.")
+	}
+	return link.accessToken
+}
+
+/**
  * Fetch the user's linked GitHub account row (token + scope + provider user
  * id). Returns null when no link exists. Better-auth stores the GitHub user
  * id (numeric, as a string) in `accountId`, not the login — we resolve the

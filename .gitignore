@@ -25,3 +25,5 @@ drizzle/migrations/meta/_journal.json
 
 # TanStack Router plugin cache.
 .tanstack/
+
+.trigger

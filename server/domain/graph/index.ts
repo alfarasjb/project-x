@@ -8,6 +8,7 @@ import {
 	type NodeClassification
 } from "@shared/schemas/graph"
 import { IssuesSchema, type Issue } from "@shared/schemas/issue"
+import type { CrawlResponse } from "@shared/schemas/crawl"
 import type { Project } from "@shared/schemas/project"
 import { getDb } from "@server/db"
 import { projects } from "@server/db/schema/projects"
@@ -15,6 +16,7 @@ import { parseProject } from "@server/parser"
 import { analyzeGraph } from "@server/audit/analyze"
 import { runAudit, runSimilarityAudit, mergeIssueHistory } from "@server/audit/run"
 import { embedNodes } from "@server/domain/embeddings"
+import { dispatchCrawlGithub } from "@server/domain/crawl-dispatch"
 import { AppError } from "@server/utils/errors"
 
 /**
@@ -113,10 +115,40 @@ function mergePreservedFields(fresh: Graph, previous: Graph): Graph {
 }
 
 /**
- * Crawl a project: re-parse its codebase, run the audit pass, and persist
- * both. This is the "Crawl" action — the one operation that refreshes the
- * parsed graph. Reads (`getProjectGraph`, `getProjectIssues`) only ever
- * return what a crawl wrote.
+ * Crawl a project — entry point for both code paths. Two modes:
+ *
+ *   - Local (`rootPath`) — Fastify runs the parse + audit inline against the
+ *     local filesystem and returns the fresh graph in the same request.
+ *   - GitHub (`repoUrl`) — dispatch a Trigger.dev task that clones, parses,
+ *     and persists on a worker. Returns a runId immediately; the UI polls
+ *     `GET /api/crawl-runs/:runId` to discover completion, then refetches
+ *     the graph from the DB.
+ *
+ * One of `rootPath` / `repoUrl` is always set on a project (DB constraint
+ * is loose, but `createProject` enforces it). Neither = real bug, 409.
+ *
+ * Crawl is non-destructive for agent-written data and deterministic — see
+ * `crawlProjectFromPath` for the inner loop.
+ */
+export async function crawlProject(project: Project, userId: string): Promise<CrawlResponse> {
+	if (project.repoUrl) {
+		const { runId } = await dispatchCrawlGithub(project, userId)
+		return { kind: "queued", runId }
+	}
+	if (!project.rootPath) {
+		throw new AppError(
+			409,
+			`Project "${project.slug}" has neither a local path nor a GitHub URL — can't crawl.`
+		)
+	}
+	const graph = await crawlProjectFromPath(project, project.rootPath)
+	return { kind: "completed", graph }
+}
+
+/**
+ * The "parse, audit, persist" inner loop, parameterized by where the
+ * source lives on disk. Called inline by the local-crawl path and by the
+ * Trigger.dev crawl-github task after it extracts the tarball.
  *
  * Crawl is non-destructive for agent-written data: descriptions and
  * classifications from the previous graph are carried over onto matching
@@ -128,14 +160,8 @@ function mergePreservedFields(fresh: Graph, previous: Graph): Graph {
  * (classification + description) is the separate, user-triggered Analyze
  * action; see `analyzeProject`.
  */
-export async function crawlProject(project: Project): Promise<Graph> {
-	if (!project.rootPath) {
-		throw new AppError(
-			409,
-			`Project "${project.slug}" was imported from GitHub. Crawling GitHub-imported repos is not yet supported on this server — coming in the next release.`
-		)
-	}
-	const fresh = await parseProject(project.rootPath)
+export async function crawlProjectFromPath(project: Project, sourcePath: string): Promise<Graph> {
+	const fresh = await parseProject(sourcePath)
 	const previous = await getProjectGraph(project.id)
 	const previousIssues = await getProjectIssues(project.id)
 	const merged = previous ? mergePreservedFields(fresh, previous.actual) : fresh

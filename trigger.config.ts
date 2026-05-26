@@ -21,7 +21,7 @@ import { defineConfig } from "@trigger.dev/sdk"
  * extends `tsconfig.base.json` where the aliases are defined).
  */
 export default defineConfig({
-	project: "proj_REPLACE_ME",
+	project: "proj_pcuvksvbvpwtgxvsjsic",
 	dirs: ["./server/trigger"],
 	runtime: "node",
 	logLevel: "info",
