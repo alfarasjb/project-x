@@ -8,7 +8,8 @@ import {
 	type NodeClassification
 } from "@shared/schemas/graph"
 import { IssuesSchema, type Issue } from "@shared/schemas/issue"
-import type { CrawlResponse } from "@shared/schemas/crawl"
+import type { AnalyzeResponse, CrawlResponse } from "@shared/schemas/crawl"
+import { dispatchAnalyzeProject } from "@server/domain/analyze-dispatch"
 import type { Project } from "@shared/schemas/project"
 import { getDb } from "@server/db"
 import { projects } from "@server/db/schema/projects"
@@ -179,26 +180,57 @@ export async function crawlProjectFromPath(project: Project, sourcePath: string)
 }
 
 /**
- * Run the AI enrichment pass over a project's stored graph: classify and
- * describe every file/module that doesn't already have both. Re-runs the
- * heuristic audit afterwards (today the rules don't read classifications,
- * but the next audit PR will — running it now keeps the contract simple:
- * Analyze always leaves the issues consistent with the graph).
+ * Run the AI enrichment pass over a project's stored graph — entry point
+ * for both code paths.
  *
- * Separate from crawl because it costs money (per-token API calls) and
- * requires `ANTHROPIC_API_KEY`. The route handler maps a missing key to a
- * 4xx; per-node failures inside the pass are logged and the rest of the
- * graph still saves, so partial-analyze is a recoverable state.
+ *   - Local (`rootPath`) — Fastify runs the LLM pass inline against the
+ *     working tree and returns the result in the same request.
+ *   - GitHub (`repoUrl`) — dispatch a Trigger.dev task that clones, runs
+ *     the same pass on a worker, and persists. Returns a runId
+ *     immediately; the UI polls `GET /api/task-runs/:runId`.
+ *
+ * Analyze is a distinct user action from crawl: it assumes a graph
+ * already exists (throws 409 otherwise) and only refreshes the LLM-
+ * derived enrichment + the similarity audit. Crawl is not implied.
  */
 export async function analyzeProject(
 	project: Project,
+	userId: string,
+	options?: { force?: boolean }
+): Promise<AnalyzeResponse> {
+	if (project.repoUrl) {
+		const { runId } = await dispatchAnalyzeProject(project, userId, {
+			force: options?.force ?? false
+		})
+		return { kind: "queued", runId }
+	}
+	if (!project.rootPath) {
+		throw new AppError(
+			409,
+			`Project "${project.slug}" has neither a local path nor a GitHub URL — can't analyze.`
+		)
+	}
+	const result = await analyzeProjectFromPath(project, project.rootPath, options)
+	return { kind: "completed", result }
+}
+
+/**
+ * The "classify + describe + embed + similarity audit" inner loop,
+ * parameterized by where the source lives on disk. Called inline by the
+ * local-analyze path and by the Trigger.dev analyze-project task after it
+ * clones the tarball.
+ *
+ * Wraps the whole pass in a Langfuse `observe` span so per-node analyze
+ * calls + per-attempt generations nest under a single project-level trace
+ * with rolled-up cost + token totals. Per-node failures are logged inside
+ * `analyzeGraph` and the rest of the graph still saves — partial-analyze
+ * is a recoverable state.
+ */
+export async function analyzeProjectFromPath(
+	project: Project,
+	sourcePath: string,
 	options?: { force?: boolean }
 ): Promise<{ graph: Graph; analyzed: number; skipped: number; failed: number }> {
-	// Root trace for the whole analyze run. Every per-node call inside
-	// `analyzeGraph` nests under this as `analyze-node <path>`, and each
-	// LLM attempt nests one level deeper as a generation span — so a
-	// single Langfuse trace shows the full project → node → generation
-	// hierarchy with rolled-up cost + token totals.
 	const traced = observe(
 		async () => {
 			const stored = await getProjectGraph(project.id)
@@ -219,13 +251,7 @@ export async function analyzeProject(
 					force: options?.force ?? false
 				}
 			})
-			if (!project.rootPath) {
-				throw new AppError(
-					409,
-					`Project "${project.slug}" was imported from GitHub. Analyzing GitHub-imported repos is not yet supported on this server — coming in the next release.`
-				)
-			}
-			const result = await analyzeGraph(current, project.rootPath, options)
+			const result = await analyzeGraph(current, sourcePath, options)
 			const previousIssues = await getProjectIssues(project.id)
 			const heuristicIssues = runAudit(result.graph)
 			await saveActualGraph(project.id, result.graph)

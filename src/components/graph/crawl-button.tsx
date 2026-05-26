@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { RefreshCw } from "lucide-react"
 import { useCrawlProject } from "@/hooks/use-crawl-project"
-import { useCrawlRunStatus } from "@/hooks/use-crawl-run-status"
+import { useTaskRunStatus } from "@/hooks/use-task-run-status"
 import {
 	graphQueryOptions,
 	issuesQueryOptions,
@@ -27,7 +27,7 @@ export function CrawlButton({ projectId }: { projectId: string }) {
 	const [runId, setRunId] = useState<string | null>(null)
 	const queryClient = useQueryClient()
 	const { mutate, isPending } = useCrawlProject(projectId)
-	const runStatus = useCrawlRunStatus(runId)
+	const runStatus = useTaskRunStatus(runId)
 
 	// Consume the terminal poll. On success we *await the refetch* before
 	// clearing the runId — otherwise the button releases while the (stale,

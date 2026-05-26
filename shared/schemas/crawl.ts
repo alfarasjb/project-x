@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { GraphSchema } from "@shared/schemas/graph"
+import { AnalyzeResultSchema, GraphSchema } from "@shared/schemas/graph"
 
 /**
  * Crawl wire shapes — the response type from `POST /api/projects/:id/graph/crawl`
@@ -25,14 +25,28 @@ export const CrawlResponseSchema = z.discriminatedUnion("kind", [
 export type CrawlResponse = z.infer<typeof CrawlResponseSchema>
 
 /**
- * Normalized run status returned by `GET /api/crawl-runs/:runId`. Trigger
- * exposes a longer-tail set of statuses (REATTEMPTING, FROZEN, CRASHED, …);
- * we collapse them into the three terminal categories the UI actually
- * branches on, plus an `error` field on `failed` for surfacing to the user.
+ * Response shape for `POST /api/projects/:id/analyze`. Mirrors
+ * `CrawlResponse`: local projects analyze inline and return the full
+ * result; GitHub projects dispatch a Trigger.dev task and return a runId
+ * for the client to poll. Analyze is independent of crawl — the task only
+ * needs an already-crawled graph; it does NOT re-run crawl.
  */
-export const CrawlRunStatusSchema = z.object({
+export const AnalyzeResponseSchema = z.discriminatedUnion("kind", [
+	z.object({ kind: z.literal("completed"), result: AnalyzeResultSchema }),
+	z.object({ kind: z.literal("queued"), runId: z.string().min(1) })
+])
+export type AnalyzeResponse = z.infer<typeof AnalyzeResponseSchema>
+
+/**
+ * Normalized run status returned by `GET /api/task-runs/:runId`. Used by
+ * every long-running task we poll (crawl, analyze, future handlers).
+ * Trigger exposes a longer-tail set of statuses (REATTEMPTING, FROZEN,
+ * CRASHED, …); we collapse them into the four states the UI branches on,
+ * plus an `error` field on `failed` for surfacing to the user.
+ */
+export const TaskRunStatusSchema = z.object({
 	runId: z.string().min(1),
 	status: z.enum(["queued", "running", "completed", "failed"]),
 	error: z.string().nullable()
 })
-export type CrawlRunStatus = z.infer<typeof CrawlRunStatusSchema>
+export type TaskRunStatus = z.infer<typeof TaskRunStatusSchema>

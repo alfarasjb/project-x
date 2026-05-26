@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { runs } from "@trigger.dev/sdk"
 import { z } from "zod"
 import { apiRoutePatterns } from "@shared/api-routes"
-import type { CrawlRunStatus } from "@shared/schemas/crawl"
+import type { TaskRunStatus } from "@shared/schemas/crawl"
 import { EMPTY_GRAPH } from "@shared/schemas/graph"
 import { AppError } from "@server/utils/errors"
 import { requireAuth } from "@server/auth-context"
@@ -58,27 +58,24 @@ export async function graphRoutes(app: FastifyInstance): Promise<void> {
 	 * as bearer-shaped is fine for v1. Revisit if we ever need stricter
 	 * tenancy for crawl runs.
 	 */
-	app.get<{ Params: { runId: string } }>(apiRoutePatterns.crawlRun, async (request) => {
+	app.get<{ Params: { runId: string } }>(apiRoutePatterns.taskRun, async (request) => {
 		await requireAuth(request)
 		const run = await runs.retrieve(request.params.runId)
-		const status = normalizeCrawlRunStatus(run.status)
+		const status = normalizeTaskRunStatus(run.status)
 		const error = run.error ? extractErrorMessage(run.error) : null
-		const body: CrawlRunStatus = { runId: run.id, status, error }
+		const body: TaskRunStatus = { runId: run.id, status, error }
 		return body
 	})
 
 	app.post<{ Params: { id: string }; Body: unknown }>(
 		apiRoutePatterns.projectAnalyze,
 		async (request) => {
-			const { organizationId } = await requireAuth(request)
+			const { organizationId, userId } = await requireAuth(request)
 			const project = await getProjectForOrg(request.params.id, organizationId)
 			if (!project) throw new AppError(404, `Project not found: ${request.params.id}`)
 			const body = AnalyzeBodySchema.parse(request.body ?? {})
 			try {
-				const { graph, analyzed, skipped, failed } = await analyzeProject(project, {
-					force: body?.force ?? false
-				})
-				return { graph, analyzed, skipped, failed }
+				return await analyzeProject(project, userId, { force: body?.force ?? false })
 			} catch (error) {
 				if (error instanceof MissingProviderKeyError) {
 					throw new AppError(
@@ -99,7 +96,7 @@ export async function graphRoutes(app: FastifyInstance): Promise<void> {
  * states don't trip the failed branch — the polling loop will see the next
  * status soon anyway.
  */
-function normalizeCrawlRunStatus(triggerStatus: string): CrawlRunStatus["status"] {
+function normalizeTaskRunStatus(triggerStatus: string): TaskRunStatus["status"] {
 	switch (triggerStatus) {
 		case "QUEUED":
 		case "PENDING_VERSION":
