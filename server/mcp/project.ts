@@ -34,7 +34,9 @@ export async function resolveBoundProject(): Promise<Project> {
 	const projects = await listAllProjects()
 
 	const cwd = resolve(process.cwd())
-	const byCwd = projects.find((project) => resolve(project.rootPath) === cwd)
+	const byCwd = projects.find(
+		(project) => project.rootPath !== null && resolve(project.rootPath) === cwd
+	)
 	if (byCwd) return byCwd
 
 	const [only] = projects

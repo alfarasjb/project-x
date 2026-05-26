@@ -5,6 +5,7 @@ import { Plus } from "lucide-react"
 import { apiRoutes } from "@shared/api-routes"
 import { ProjectSchema } from "@shared/schemas/project"
 import { apiPost } from "@/lib/api"
+import { projectsQueryOptions } from "@/lib/queries"
 import { queryKeys } from "@/lib/query-keys"
 import { routes } from "@/lib/routes"
 
@@ -21,8 +22,19 @@ export function NewProjectForm({ orgSlug }: { orgSlug: string }) {
 	const navigate = useNavigate()
 
 	const { mutate, isPending, error } = useMutation({
-		mutationFn: () => apiPost(apiRoutes.projectsList, ProjectSchema, { name, rootPath }),
+		mutationFn: () =>
+			apiPost(apiRoutes.projectsList, ProjectSchema, {
+				source: "local" as const,
+				name,
+				rootPath
+			}),
 		onSuccess: (project) => {
+			// Seed the list cache so the project route's slug→id loader finds
+			// the new row immediately; `invalidateQueries` alone refetches
+			// lazily and loses the race with navigation → 404.
+			queryClient.setQueryData(projectsQueryOptions().queryKey, (prev) =>
+				prev ? [project, ...prev] : [project]
+			)
 			void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
 			void navigate({
 				to: routes.project,
@@ -40,7 +52,7 @@ export function NewProjectForm({ orgSlug }: { orgSlug: string }) {
 		"w-full rounded-md border bg-background px-3 py-1.5 text-sm outline-none transition-colors focus:border-foreground/30"
 
 	return (
-		<form onSubmit={handleSubmit} className="bg-card space-y-3 rounded-xl border p-4">
+		<form onSubmit={handleSubmit} className="space-y-3">
 			<div className="space-y-1">
 				<label className="text-xs font-medium" htmlFor="project-name">
 					Name

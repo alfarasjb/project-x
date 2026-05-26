@@ -45,7 +45,7 @@ export function ProjectCard({ project, orgSlug }: { project: Project; orgSlug: s
 						<span className="truncate">{project.name}</span>
 					</h3>
 					<p className="text-muted-foreground mt-1 truncate font-mono text-xs">
-						{project.rootPath}
+						{project.repoUrl ?? project.rootPath ?? "—"}
 					</p>
 					<p className="text-muted-foreground mt-2 text-[11px]">
 						{project.lastParsedAt

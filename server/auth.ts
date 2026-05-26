@@ -40,6 +40,57 @@ export const auth = betterAuth({
 		minPasswordLength: 8
 	},
 
+	/**
+	 * Account-linking gates which providers may attach to an existing user via
+	 * `linkSocial`. By default better-auth rejects unknown providers with
+	 * `unable_to_link_account` — we explicitly trust GitHub here because the
+	 * integration uses linking as an authorization step (storing a per-user
+	 * GitHub OAuth token), not as a sign-in identity.
+	 *
+	 * `allowDifferentEmails: true` because the user's app account (email/pw)
+	 * and their GitHub account are independent identities — we don't require
+	 * `alice@personal.com` to also be the email on `alice`'s GitHub.
+	 */
+	account: {
+		/**
+		 * OAuth state goes in an encrypted cookie on this server's origin —
+		 * NOT the `verification` table. The DB strategy was reliably failing
+		 * the callback's state lookup ("verification not found") and never
+		 * persisting the new account row's scope, so the integration UI kept
+		 * reflecting the empty-scope row from the original link. Cookie
+		 * round-trips with the OAuth redirect from GitHub back to Fastify
+		 * (same-origin), no DB read/write race, no cleanup hook to fight with.
+		 */
+		storeStateStrategy: "cookie",
+		accountLinking: {
+			enabled: true,
+			trustedProviders: ["github"],
+			allowDifferentEmails: true
+		}
+	},
+
+	/**
+	 * GitHub OAuth — registered only when the OAuth-app credentials are
+	 * configured. The integration UI is the only consumer; sign-in via GitHub
+	 * is implicitly supported by better-auth (same provider config powers both
+	 * `signIn.social` and `linkSocial`).
+	 *
+	 * Scope `repo` covers private + public repos and is what we need to clone
+	 * later; `read:user` lets us pull the user's GitHub login for display.
+	 * Tokens land in the better-auth `account` table; read them via the
+	 * `github` domain helpers, not directly.
+	 */
+	socialProviders:
+		env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET
+			? {
+					github: {
+						clientId: env.GITHUB_CLIENT_ID,
+						clientSecret: env.GITHUB_CLIENT_SECRET,
+						scope: ["repo", "read:user"]
+					}
+				}
+			: undefined,
+
 	session: {
 		expiresIn: 60 * 60 * 24 * 7, // 7 days
 		updateAge: 60 * 60 * 24 // refresh sliding window once per day

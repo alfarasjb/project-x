@@ -29,7 +29,22 @@ export const projects = schema.table(
 			.references(() => organization.id, { onDelete: "cascade" }),
 		slug: text("slug").notNull(),
 		name: text("name").notNull(),
-		rootPath: text("root_path").notNull(),
+		/**
+		 * Absolute path to a local repository directory. Legacy/dogfood path —
+		 * present on projects created before the GitHub-import flow shipped.
+		 * New projects imported from GitHub have `repoUrl` set instead and leave
+		 * this null. Exactly one of `rootPath` / `repoUrl` must be set, enforced
+		 * at the domain / schema layer (not the DB) so we can evolve the rule
+		 * without a migration.
+		 */
+		rootPath: text("root_path"),
+		/**
+		 * GitHub clone URL for projects imported from GitHub (e.g.
+		 * `https://github.com/owner/repo`). The crawler will shallow-clone this
+		 * at crawl time using the user's stored OAuth token. Mutually exclusive
+		 * with `rootPath` — see comment there.
+		 */
+		repoUrl: text("repo_url"),
 		intentGraph: jsonb("intent_graph")
 			.$type<Graph>()
 			.notNull()

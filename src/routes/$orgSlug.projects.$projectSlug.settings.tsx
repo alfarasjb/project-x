@@ -106,12 +106,12 @@ function SettingsRoute() {
 				</form>
 
 				<section className="text-muted-foreground space-y-2 text-xs">
-					<h2 className="text-foreground text-sm font-medium">Repository path</h2>
+					<h2 className="text-foreground text-sm font-medium">Repository source</h2>
 					<p className="bg-muted/40 rounded border p-2 font-mono text-[11px]">
-						{project?.rootPath ?? "Loading…"}
+						{project ? (project.repoUrl ?? project.rootPath ?? "—") : "Loading…"}
 					</p>
 					<p>
-						Path changes aren&apos;t supported yet — archive and re-create the project to repoint.
+						Source changes aren&apos;t supported yet — archive and re-create the project to repoint.
 					</p>
 				</section>
 			</div>
