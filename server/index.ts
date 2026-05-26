@@ -9,6 +9,7 @@ import { authRoutes } from "@server/routes/auth"
 import { projectRoutes } from "@server/routes/projects"
 import { graphRoutes } from "@server/routes/graph"
 import { issueRoutes } from "@server/routes/issues"
+import { integrationRoutes } from "@server/routes/integrations"
 import { AppError } from "@server/utils/errors"
 
 const PORT = env.PORT
@@ -60,6 +61,7 @@ await app.register(authRoutes)
 await app.register(projectRoutes)
 await app.register(graphRoutes)
 await app.register(issueRoutes)
+await app.register(integrationRoutes)
 
 try {
 	await app.listen({ port: PORT, host: "0.0.0.0" })

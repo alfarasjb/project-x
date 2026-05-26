@@ -70,6 +70,18 @@ const envSchema = z.object({
 	/** Tag traces with this string in Langfuse (e.g. "development", "production"). */
 	LANGFUSE_ENVIRONMENT: z.string().min(1).default("development"),
 	/**
+	 * GitHub OAuth app credentials — optional. Required only for the GitHub
+	 * integration (Settings → Integrations → Connect GitHub) and the
+	 * import-from-GitHub project flow. When unset, better-auth's GitHub social
+	 * provider is not registered and the integration UI tells the user the
+	 * server-side credentials are missing.
+	 *
+	 * Create an OAuth app at https://github.com/settings/developers with the
+	 * callback URL `${BETTER_AUTH_URL}/api/auth/callback/github`.
+	 */
+	GITHUB_CLIENT_ID: z.string().min(1).optional(),
+	GITHUB_CLIENT_SECRET: z.string().min(1).optional(),
+	/**
 	 * Trigger.dev — optional. Workers (background jobs) deploy to Trigger.dev
 	 * cloud; the Fastify server boots fine without these, but any code path
 	 * that calls `task.trigger()` needs `TRIGGER_SECRET_KEY` (the SDK reads it

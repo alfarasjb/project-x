@@ -97,15 +97,28 @@ export function Sidebar() {
 							<div className="truncate text-[11px] font-medium">{session.user.name}</div>
 							<div className="text-muted-foreground truncate text-[10px]">{session.user.email}</div>
 						</div>
-						<button
-							type="button"
-							onClick={handleSignOut}
-							className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1.5 transition-colors"
-							title="Sign out"
-							aria-label="Sign out"
-						>
-							<LogOut className="size-3.5" />
-						</button>
+						<div className="flex items-center gap-0.5">
+							{orgSlug && (
+								<Link
+									to={routes.settings}
+									params={{ orgSlug }}
+									className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1.5 transition-colors data-[status=active]:bg-muted data-[status=active]:text-foreground"
+									title="Settings"
+									aria-label="Settings"
+								>
+									<Settings className="size-3.5" />
+								</Link>
+							)}
+							<button
+								type="button"
+								onClick={handleSignOut}
+								className="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1.5 transition-colors"
+								title="Sign out"
+								aria-label="Sign out"
+							>
+								<LogOut className="size-3.5" />
+							</button>
+						</div>
 					</div>
 				</div>
 			)}

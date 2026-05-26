@@ -26,6 +26,7 @@ const projectColumns = {
 	slug: projects.slug,
 	name: projects.name,
 	rootPath: projects.rootPath,
+	repoUrl: projects.repoUrl,
 	lastParsedAt: projects.lastParsedAt,
 	archivedAt: projects.archivedAt,
 	createdAt: projects.createdAt,
@@ -101,21 +102,26 @@ export async function getProjectBySlug(
 }
 
 /**
- * Create a project for an org. `rootPath` is resolved to an absolute path and
- * verified to be an existing directory — a bad path is a 400, not a late
- * crawl failure.
+ * Create a project for an org. Two sources:
+ *
+ *   - `source: "local"` — a filesystem path. Resolved to absolute and verified
+ *     to be a directory. A bad path is a 400, not a late crawl failure.
+ *   - `source: "github"` — a GitHub clone URL. Trusted at create time (no
+ *     network call); the crawler validates it later when it tries to clone.
+ *
+ * Exactly one of `rootPath` / `repoUrl` is set on the resulting row.
  */
 export async function createProject(
 	input: CreateProject,
 	organizationId: string
 ): Promise<Project> {
-	const rootPath = resolveRepoPath(input.rootPath)
 	const db = getDb()
 	const slug = await uniqueSlug(input.name, organizationId)
-	const [project] = await db
-		.insert(projects)
-		.values({ name: input.name, slug, rootPath, organizationId })
-		.returning(projectColumns)
+	const values =
+		input.source === "local"
+			? { name: input.name, slug, organizationId, rootPath: resolveRepoPath(input.rootPath) }
+			: { name: input.name, slug, organizationId, repoUrl: input.repoUrl }
+	const [project] = await db.insert(projects).values(values).returning(projectColumns)
 	if (!project) {
 		throw new AppError(500, "createProject: insert returned no row")
 	}

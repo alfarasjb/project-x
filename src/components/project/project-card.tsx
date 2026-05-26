@@ -1,10 +1,7 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { Archive, ArchiveRestore, FolderGit2 } from "lucide-react"
-import { apiRoutes } from "@shared/api-routes"
-import { ProjectSchema, type Project } from "@shared/schemas/project"
-import { apiPost } from "@/lib/api"
-import { queryKeys } from "@/lib/query-keys"
+import type { Project } from "@shared/schemas/project"
+import { useToggleProjectArchive } from "@/hooks/use-toggle-project-archive"
 import { routes } from "@/lib/routes"
 import { toast, toastError } from "@/lib/toast"
 import { cn } from "@/lib/utils"
@@ -15,21 +12,16 @@ import { cn } from "@/lib/utils"
  * Either action invalidates the `["projects", …]` lists so both refresh.
  */
 export function ProjectCard({ project, orgSlug }: { project: Project; orgSlug: string }) {
-	const queryClient = useQueryClient()
 	const isArchived = project.archivedAt !== null
+	const { mutate: toggleArchive, isPending } = useToggleProjectArchive(project)
 
-	const { mutate: toggleArchive, isPending } = useMutation({
-		mutationFn: () =>
-			apiPost(
-				isArchived ? apiRoutes.projectUnarchive(project.id) : apiRoutes.projectArchive(project.id),
-				ProjectSchema
-			),
-		onSuccess: () => {
-			void queryClient.invalidateQueries({ queryKey: queryKeys.projects.all })
-			toast.success(isArchived ? `Restored "${project.name}"` : `Archived "${project.name}"`)
-		},
-		onError: (error) => toastError(error, isArchived ? "Restore failed." : "Archive failed.")
-	})
+	const handleToggle = (): void => {
+		toggleArchive(undefined, {
+			onSuccess: () =>
+				toast.success(isArchived ? `Restored "${project.name}"` : `Archived "${project.name}"`),
+			onError: (cause) => toastError(cause, isArchived ? "Restore failed." : "Archive failed.")
+		})
+	}
 
 	return (
 		<div
@@ -45,7 +37,7 @@ export function ProjectCard({ project, orgSlug }: { project: Project; orgSlug: s
 						<span className="truncate">{project.name}</span>
 					</h3>
 					<p className="text-muted-foreground mt-1 truncate font-mono text-xs">
-						{project.rootPath}
+						{project.repoUrl ?? project.rootPath ?? "—"}
 					</p>
 					<p className="text-muted-foreground mt-2 text-[11px]">
 						{project.lastParsedAt
@@ -55,7 +47,7 @@ export function ProjectCard({ project, orgSlug }: { project: Project; orgSlug: s
 				</div>
 				<button
 					type="button"
-					onClick={() => toggleArchive()}
+					onClick={handleToggle}
 					disabled={isPending}
 					title={isArchived ? "Restore project" : "Archive project"}
 					className="text-muted-foreground hover:text-foreground rounded-md border p-1.5 transition-colors disabled:opacity-50"

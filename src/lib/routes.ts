@@ -25,5 +25,8 @@ export const routes = {
 	projects: "/$orgSlug/projects",
 	project: "/$orgSlug/projects/$projectSlug",
 	projectGraph: "/$orgSlug/projects/$projectSlug/graph",
-	projectSettings: "/$orgSlug/projects/$projectSlug/settings"
+	projectSettings: "/$orgSlug/projects/$projectSlug/settings",
+	settings: "/$orgSlug/settings",
+	settingsAccount: "/$orgSlug/settings/account",
+	settingsIntegrations: "/$orgSlug/settings/integrations"
 } as const
