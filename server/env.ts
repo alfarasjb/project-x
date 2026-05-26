@@ -68,7 +68,19 @@ const envSchema = z.object({
 	/** Self-hosted Langfuse URL; defaults to cloud. */
 	LANGFUSE_BASE_URL: z.url().default("https://cloud.langfuse.com"),
 	/** Tag traces with this string in Langfuse (e.g. "development", "production"). */
-	LANGFUSE_ENVIRONMENT: z.string().min(1).default("development")
+	LANGFUSE_ENVIRONMENT: z.string().min(1).default("development"),
+	/**
+	 * Trigger.dev — optional. Workers (background jobs) deploy to Trigger.dev
+	 * cloud; the Fastify server boots fine without these, but any code path
+	 * that calls `task.trigger()` needs `TRIGGER_SECRET_KEY` (the SDK reads it
+	 * from `process.env` directly at dispatch time).
+	 *
+	 * `TRIGGER_PROJECT_REF` mirrors the `project` ref hardcoded in
+	 * `trigger.config.ts` — the CLI reads from the config file, not env, so
+	 * this is purely for the server (e.g. building dashboard deep links).
+	 */
+	TRIGGER_SECRET_KEY: z.string().min(1).optional(),
+	TRIGGER_PROJECT_REF: z.string().min(1).optional()
 })
 
 const parsed = envSchema.safeParse(process.env)
