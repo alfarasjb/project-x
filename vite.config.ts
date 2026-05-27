@@ -19,6 +19,12 @@ export default defineConfig({
 			"@shared": path.resolve(import.meta.dirname, "./shared")
 		}
 	},
+	build: {
+		// Carve out a dedicated subdir so server-side artifacts under dist/ don't
+		// collide with the static bundle Fastify serves in production.
+		outDir: "dist/web",
+		emptyOutDir: true
+	},
 	server: {
 		port: 5173,
 		proxy: {

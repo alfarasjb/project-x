@@ -2,9 +2,12 @@
 // `observe()` call from downstream imports runs. No-op when Langfuse env
 // vars are unset.
 import "@server/observability/tracing"
+import { existsSync } from "node:fs"
+import { join, resolve } from "node:path"
 import { env } from "@server/env"
 import Fastify from "fastify"
 import cors from "@fastify/cors"
+import fastifyStatic from "@fastify/static"
 import { authRoutes } from "@server/routes/auth"
 import { projectRoutes } from "@server/routes/projects"
 import { graphRoutes } from "@server/routes/graph"
@@ -62,6 +65,30 @@ await app.register(projectRoutes)
 await app.register(graphRoutes)
 await app.register(issueRoutes)
 await app.register(integrationRoutes)
+
+/**
+ * Single-service production mode: when a Vite build is present at `dist/web/`,
+ * Fastify also serves the SPA. Detection is by file presence (not NODE_ENV) so
+ * `pnpm build && pnpm start` works locally without env wrangling, and `pnpm dev`
+ * naturally skips this branch — the Vite dev server handles the frontend there.
+ *
+ * The SPA fallback fires only for non-API GETs that didn't match a static file.
+ * API 404s still respond as JSON; client-side routes (e.g. /projects/abc) get
+ * index.html and let the router resolve them.
+ */
+const webDist = resolve(process.cwd(), "dist/web")
+const webIndex = join(webDist, "index.html")
+if (existsSync(webIndex)) {
+	await app.register(fastifyStatic, { root: webDist, prefix: "/" })
+	app.setNotFoundHandler((request, reply) => {
+		if (request.method !== "GET" || request.url.startsWith("/api/")) {
+			reply.status(404).send({ error: "Not Found" })
+			return
+		}
+		reply.sendFile("index.html")
+	})
+	app.log.info(`serving web bundle from ${webDist}`)
+}
 
 try {
 	await app.listen({ port: PORT, host: "0.0.0.0" })
