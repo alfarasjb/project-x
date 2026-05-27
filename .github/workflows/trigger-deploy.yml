@@ -1,0 +1,56 @@
+name: Trigger.dev Deploy
+
+# Pushes task code under `server/trigger/` to Trigger.dev's prod environment
+# whenever main changes the task surface or its build inputs.
+#
+# Auth: `TRIGGER_ACCESS_TOKEN` (a Personal Access Token, `tr_pat_***`).
+# Generate at https://cloud.trigger.dev/account/tokens and store as a repo
+# Actions secret. This is distinct from `TRIGGER_SECRET_KEY` (runtime auth
+# the deployed Fastify uses to dispatch tasks).
+#
+# Target project ref is read from `trigger.config.ts` at the repo root — the
+# CLI doesn't take it via env. PAT scopes to the user's projects.
+
+"on":
+  push:
+    branches: [main]
+    paths:
+      - "server/trigger/**"
+      - "trigger.config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  # Allow firing manually from the Actions tab when needed (e.g. after a
+  # PAT rotation or to deploy without any task code changes).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trigger-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: 🚀 Deploy tasks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deploy to Trigger.dev (prod)
+        run: pnpm exec trigger deploy
+        env:
+          TRIGGER_ACCESS_TOKEN: ${{ secrets.TRIGGER_ACCESS_TOKEN }}
