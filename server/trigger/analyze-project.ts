@@ -14,9 +14,14 @@ import { withClonedRepo } from "@server/domain/with-cloned-repo"
  * Machine sizing matters here. Default is `small-1x` (0.5GB RAM) which
  * works for small repos but a monorepo with thousands of nodes wants
  * more headroom for the in-memory graph + LLM client + embedding batches.
- * Bumping to `medium-1x` (2GB) for now. `maxDuration` overridden to 1800s
- * because Haiku-on-5000-nodes can legitimately take 20+ minutes; the
- * global 300s default would kill it mid-pass.
+ * Bumping to `medium-1x` (2GB).
+ *
+ * Cost ceiling: `maxDuration: 600` (10 min) and `retry.maxAttempts: 1`.
+ * The 10-min ceiling kills truly runaway runs without retrying — analyze
+ * isn't cheap to retry from scratch and a stuck pass is more likely to
+ * stay stuck than recover. Project-sized repos (~100s of nodes) finish
+ * well under this; a multi-thousand-node monorepo that legitimately needs
+ * longer is a "click again" problem, not an "auto-retry" one.
  *
  * Body is thin: clone via the shared HOF, hand the path to the existing
  * inline analyze pipeline. Same code as local-rootPath analyze — only
@@ -25,7 +30,8 @@ import { withClonedRepo } from "@server/domain/with-cloned-repo"
 export const analyzeProjectTask = schemaTask({
 	id: "analyze-project",
 	machine: "medium-1x",
-	maxDuration: 1800,
+	maxDuration: 600,
+	retry: { maxAttempts: 1 },
 	schema: z.object({
 		projectId: z.uuid(),
 		userId: z.string().min(1),

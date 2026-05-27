@@ -13,9 +13,15 @@ import { withClonedRepo } from "@server/domain/with-cloned-repo"
  * `withClonedRepo` HOF (which owns clone + extract + cleanup), hand the
  * extracted path to `crawlProjectFromPath`. Same persistence + audit
  * logic as the local-rootPath path — only the source-of-files differs.
+ *
+ * `retry.maxAttempts: 1` — a stuck clone retried with no new input rarely
+ * recovers; failed runs surface to the UI and the user re-clicks. Cheaper
+ * and clearer than burning 3× compute on the same failure mode. Inherits
+ * the global 300s `maxDuration` from trigger.config.ts.
  */
 export const crawlGithubRepoTask = schemaTask({
 	id: "crawl-github-repo",
+	retry: { maxAttempts: 1 },
 	schema: z.object({
 		projectId: z.uuid(),
 		userId: z.string().min(1)
