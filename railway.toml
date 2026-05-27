@@ -1,0 +1,21 @@
+# Railway service config.
+#
+# We use the in-repo Dockerfile for a fully reproducible build — Nixpacks
+# auto-detection is convenient but the multi-step pnpm + Vite + tsx-runtime
+# shape is easier to pin in a Dockerfile we control.
+#
+# preDeployCommand runs once per deploy in the freshly built image, BEFORE
+# any traffic shifts to the new revision. A failed migration aborts the
+# deploy — the old revision keeps serving.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "pnpm start"
+preDeployCommand = ["pnpm db:migrate"]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
