@@ -1,7 +1,10 @@
 name: Trigger.dev Deploy
 
 # Pushes task code under `server/trigger/` to Trigger.dev's prod environment
-# whenever main changes the task surface or its build inputs.
+# on every push to main. A path filter was tried but caused a bootstrap miss
+# (the PR that added this workflow didn't touch the filtered paths, so the
+# initial deploy never fired). Trigger deploys are cheap (~1-2 min) and
+# idempotent — re-running on a no-op commit is fine.
 #
 # Auth: `TRIGGER_ACCESS_TOKEN` (a Personal Access Token, `tr_pat_***`).
 # Generate at https://cloud.trigger.dev/account/tokens and store as a repo
@@ -14,13 +17,7 @@ name: Trigger.dev Deploy
 "on":
   push:
     branches: [main]
-    paths:
-      - "server/trigger/**"
-      - "trigger.config.ts"
-      - "package.json"
-      - "pnpm-lock.yaml"
-  # Allow firing manually from the Actions tab when needed (e.g. after a
-  # PAT rotation or to deploy without any task code changes).
+  # Manual fire from the Actions tab (e.g. after a PAT rotation).
   workflow_dispatch:
 
 permissions:
