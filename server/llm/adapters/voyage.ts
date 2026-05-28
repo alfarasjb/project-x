@@ -1,5 +1,5 @@
 import { LlmError, LlmErrorType } from "@server/llm/errors/types"
-import type { BaseAdapterConfig } from "@server/llm/types/config"
+import type { BaseAdapterConfig } from "@server/llm/types/adapter-config"
 import type { EmbeddingAdapter } from "@server/llm/types/adapter"
 
 const PROVIDER = "voyage"
