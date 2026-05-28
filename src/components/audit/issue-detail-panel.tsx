@@ -1,6 +1,6 @@
 import type { Eye } from "lucide-react"
 import { EyeOff, Inbox, MessageCircle, Network, X } from "lucide-react"
-import type { Issue, IssueSeverity } from "@shared/schemas/issue"
+import type { Issue, IssueSeverity, RefinementVerdict } from "@shared/schemas/issue"
 import { cn } from "@/lib/utils"
 
 /**
@@ -56,6 +56,46 @@ export function IssueDetailPanel({ issue, onClose }: { issue: Issue | null; onCl
 			) : (
 				<Section title="Description">
 					<p className="text-sm leading-relaxed whitespace-pre-line">{issue.description}</p>
+				</Section>
+			)}
+
+			{issue.refinement && (
+				<Section title="AI verdict">
+					<div className="mb-2">
+						<span
+							className={cn(
+								"inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+								VERDICT_STYLE[issue.refinement.verdict]
+							)}
+						>
+							{VERDICT_LABEL[issue.refinement.verdict]}
+						</span>
+					</div>
+					<p className="text-sm leading-relaxed whitespace-pre-line">
+						{issue.refinement.reasoning}
+					</p>
+					{issue.refinement.consolidation && (
+						<div className="mt-3">
+							<div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase tracking-wide">
+								How to consolidate
+							</div>
+							<p className="text-sm leading-relaxed whitespace-pre-line">
+								{issue.refinement.consolidation}
+							</p>
+						</div>
+					)}
+					{issue.refinement.excluded && issue.refinement.excluded.length > 0 && (
+						<div className="mt-3">
+							<div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase tracking-wide">
+								Not actually duplicates
+							</div>
+							<ul className="text-muted-foreground space-y-1 font-mono text-[11px] leading-relaxed">
+								{issue.refinement.excluded.map((path) => (
+									<li key={path}>{path}</li>
+								))}
+							</ul>
+						</div>
+					)}
 				</Section>
 			)}
 
@@ -154,6 +194,18 @@ const SEVERITY_LABEL_COLOR: Record<IssueSeverity, string> = {
 	critical: "text-destructive",
 	warning: "text-amber-600 dark:text-amber-400",
 	info: "text-blue-600 dark:text-blue-400"
+}
+
+const VERDICT_LABEL: Record<RefinementVerdict, string> = {
+	duplicate: "Duplicate",
+	partial: "Partial overlap",
+	"false-positive": "Not a duplicate"
+}
+
+const VERDICT_STYLE: Record<RefinementVerdict, string> = {
+	duplicate: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+	partial: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+	"false-positive": "bg-muted text-muted-foreground"
 }
 
 /**

@@ -1,10 +1,11 @@
-import type { Graph } from "@shared/schemas/graph"
+import type { Graph, GraphNode } from "@shared/schemas/graph"
 import type { Issue } from "@shared/schemas/issue"
 import { findSimilarNodes } from "@server/domain/embeddings/similarity"
 
 /**
- * Duplicate-candidates — surface peer pairs whose embedding-document text
- * sits below a tight cosine threshold. The "you wrote this twice" finding.
+ * Duplicate-candidates — surface CLUSTERS of nodes whose embedding-document
+ * text sits below a tight cosine threshold. The "you wrote this N times"
+ * finding.
  *
  * Unlike the heuristic rules in this directory, this one is **async + needs
  * DB access** (queries the pgvector index via `findSimilarNodes`). It runs
@@ -12,23 +13,23 @@ import { findSimilarNodes } from "@server/domain/embeddings/similarity"
  * cleanly on projects without embeddings: `findSimilarNodes` returns `[]`
  * for any node without a stored vector.
  *
- * v1 is file + module only. Function-level duplicate detection is the
- * obvious next step but needs the analyze pass to describe symbol nodes
- * first — that's a separate milestone.
+ * Clustering, not pairs: each sub-threshold neighbour relation is an
+ * undirected edge; connected components (union-find) collapse a group of
+ * mutually-similar files into ONE finding instead of N-choose-2 pair cards.
+ * Because cosine similarity isn't transitive, a component can sweep in a node
+ * that only resembles one other member — the `refine-duplicate-cluster`
+ * handler is the precision pass that splits those back out (`excluded`).
  *
- * Pair dedupe: similarity is symmetric, so without ordering we'd emit the
- * same finding twice. Lexicographic sort on `(aId, bId)` collapses both
- * directions into one issue.
+ * v1 clusters file + module nodes. Function-level duplicate detection needs
+ * the analyze pass to describe symbol nodes first — a separate milestone.
  */
 
 /**
- * Distance cutoff below which a pair is reported. Per the MCP tool surface
+ * Distance cutoff below which two nodes are linked. Per the MCP tool surface
  * description: 0 = identical, ~0.3 = strong, ~0.5 = topical, >0.7 = weak.
  * Dropped from 0.4 to 0.3 after running the audit on project-x — 0.4 picked
- * up too many topical pairs (route handlers that look architecturally
- * similar but aren't duplicates). 0.3 keeps the "strong" matches only.
- * Revisit once the duplicates handler exists and can veto false positives;
- * the threshold can loosen again with the handler as a second-pass filter.
+ * up too many topical pairs. 0.3 keeps the "strong" matches only. Can loosen
+ * again now that the refinement handler vetoes false positives as a second pass.
  */
 const DEFAULT_THRESHOLD = 0.3
 
@@ -42,49 +43,110 @@ export async function duplicateCandidates(
 	graph: Graph
 ): Promise<Omit<Issue, "firstDetected">[]> {
 	const nodeById = new Map(graph.nodes.map((node) => [node.id, node]))
-	const issues: Omit<Issue, "firstDetected">[] = []
-	const seenPairs = new Set<string>()
+	const clusters = new UnionFind()
 
+	// 1. Link every node to each sub-threshold neighbour (undirected edge).
 	for (const node of graph.nodes) {
 		if (!EMBEDDABLE_KINDS.has(node.kind)) continue
-
 		const neighbours = await findSimilarNodes({
 			projectId,
 			nodeId: node.id,
 			k: NEIGHBOURS_PER_NODE
 		})
-
 		for (const neighbour of neighbours) {
 			if (neighbour.distance >= DEFAULT_THRESHOLD) continue
-			const other = nodeById.get(neighbour.nodeId)
-			if (!other) continue
-
-			const sortedIds = [node.id, other.id].sort()
-			const aId = sortedIds[0]
-			const bId = sortedIds[1]
-			if (!aId || !bId) continue
-			const pairKey = `${aId}|${bId}`
-			if (seenPairs.has(pairKey)) continue
-			seenPairs.add(pairKey)
-
-			const a = nodeById.get(aId)
-			const b = nodeById.get(bId)
-			if (!a || !b) continue
-
-			const kindLabel = a.kind === b.kind ? `${a.kind}s` : "nodes"
-			issues.push({
-				id: `duplicate-candidates:${aId}|${bId}`,
-				category: "duplicate-candidates",
-				severity: "info",
-				title: `Possible duplicate: ${a.path} ↔ ${b.path}`,
-				description:
-					`These two ${kindLabel} have very similar descriptions and may be ` +
-					`doing the same work — worth consolidating — or one may be a copy ` +
-					`that drifted from its original. Open both and confirm before refactoring.`,
-				affected: [a.path, b.path]
-			})
+			if (!nodeById.has(neighbour.nodeId)) continue
+			clusters.union(node.id, neighbour.nodeId)
 		}
 	}
 
+	// 2. Emit one issue per connected component of 2+ members.
+	const issues: Omit<Issue, "firstDetected">[] = []
+	for (const memberIds of clusters.components()) {
+		const members = memberIds
+			.slice()
+			.sort()
+			.map((id) => nodeById.get(id))
+			.filter((node): node is GraphNode => node !== undefined)
+		if (members.length < 2) continue
+		issues.push(buildClusterIssue(members))
+	}
 	return issues
+}
+
+function buildClusterIssue(members: readonly GraphNode[]): Omit<Issue, "firstDetected"> {
+	const ids = members.map((node) => node.id)
+	const paths = members.map((node) => node.path)
+	const kinds = new Set(members.map((node) => node.kind))
+	const first = members[0]
+	const kindLabel = kinds.size === 1 && first ? `${first.kind}s` : "nodes"
+	const isPair = members.length === 2
+
+	const title = isPair
+		? `Possible duplicate: ${paths[0]} ↔ ${paths[1]}`
+		: `Possible duplicate cluster: ${members.length} ${kindLabel}`
+	const description = isPair
+		? `These two ${kindLabel} have very similar descriptions and may be doing the same ` +
+			`work — worth consolidating — or one may be a copy that drifted from its original. ` +
+			`Open both and confirm before refactoring.`
+		: `These ${members.length} ${kindLabel} have very similar descriptions and may overlap: ` +
+			`${paths.join(", ")}. Some may be consolidatable; others may just be proximity-only ` +
+			`matches. Confirm before refactoring.`
+
+	return {
+		id: `duplicate-candidates:${ids.join("|")}`,
+		category: "duplicate-candidates",
+		severity: "info",
+		title,
+		description,
+		affected: paths
+	}
+}
+
+/**
+ * Minimal union-find over string ids. Only ids passed to `union` are tracked,
+ * so `components()` returns just the clustered nodes (singletons never appear).
+ */
+class UnionFind {
+	private readonly parent = new Map<string, string>()
+
+	private add(id: string): void {
+		if (!this.parent.has(id)) this.parent.set(id, id)
+	}
+
+	find(id: string): string {
+		this.add(id)
+		let root = id
+		for (;;) {
+			const next = this.parent.get(root)
+			if (next === undefined || next === root) break
+			root = next
+		}
+		// Path compression.
+		let cursor = id
+		for (;;) {
+			const next = this.parent.get(cursor)
+			if (next === undefined || next === root) break
+			this.parent.set(cursor, root)
+			cursor = next
+		}
+		return root
+	}
+
+	union(a: string, b: string): void {
+		const rootA = this.find(a)
+		const rootB = this.find(b)
+		if (rootA !== rootB) this.parent.set(rootA, rootB)
+	}
+
+	components(): string[][] {
+		const groups = new Map<string, string[]>()
+		for (const id of this.parent.keys()) {
+			const root = this.find(id)
+			const bucket = groups.get(root)
+			if (bucket) bucket.push(id)
+			else groups.set(root, [id])
+		}
+		return [...groups.values()]
+	}
 }
