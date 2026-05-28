@@ -14,6 +14,7 @@ import { projects } from "@server/db/schema/projects"
 import { parseProject } from "@server/parser"
 import { analyzeGraph } from "@server/audit/analyze"
 import { runAudit, runSimilarityAudit, mergeIssueHistory } from "@server/audit/run"
+import { refineDuplicateClusters } from "@server/handlers/duplicate-refinement/handler"
 import { embedNodes } from "@server/domain/embeddings"
 import { AppError } from "@server/utils/errors"
 
@@ -210,7 +211,21 @@ export async function analyzeProjectFromPath(
 				}
 			)
 			const issues = mergeIssueHistory([...heuristicIssues, ...similarityIssues], previousIssues)
-			await saveProjectIssues(project.id, issues)
+			// Second-pass LLM refinement over duplicate-candidates clusters. Runs
+			// AFTER the merge so carried-forward refinements are visible to the
+			// skip-unchanged check. Reuses the analyze pass's `sourcePath` (the
+			// already-cloned repo on GitHub workers) — no re-clone. A top-level
+			// failure leaves the merged issues untouched; analyze never fails on it.
+			const refinedIssues = await refineDuplicateClusters(issues, result.graph, sourcePath).catch(
+				(error: unknown) => {
+					const message = error instanceof Error ? error.message : String(error)
+					console.warn(
+						`[analyze] ${project.slug}: duplicate refinement failed (continuing): ${message}`
+					)
+					return issues
+				}
+			)
+			await saveProjectIssues(project.id, refinedIssues)
 			console.warn(
 				`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}, embedded ${embedResult.embedded} (embed skipped ${embedResult.skipped}, failed ${embedResult.failed}), duplicate-candidates ${similarityIssues.length}${options?.force ? " (forced)" : ""}`
 			)

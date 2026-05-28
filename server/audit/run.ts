@@ -85,15 +85,25 @@ function enrichIssues(rawIssues: readonly Omit<Issue, "firstDetected">[], graph:
 }
 
 /**
- * Preserve `firstDetected` across crawls — for any new issue whose `id`
- * matches one from the previous run, carry forward the earlier timestamp
- * so "issue introduced 3 crawls ago" survives. New issues keep their
- * fresh stamp from `runAudit`.
+ * Preserve cross-crawl state — for any fresh issue whose `id` matches one from
+ * the previous run, carry forward:
+ *   - `firstDetected` — so "issue introduced 3 crawls ago" survives.
+ *   - `refinement` — the LLM verdict from a handler (e.g. duplicate-refinement).
+ *     A fresh audit issue has none; the same id means it's the same finding, so
+ *     we keep the prior verdict. The handler's own skip-unchanged logic
+ *     (sourceHashes) then decides whether to re-run or keep it.
+ *
+ * New issues keep their fresh stamp from `runAudit` and have no refinement.
  */
 export function mergeIssueHistory(fresh: Issue[], previous: Issue[]): Issue[] {
 	const previousById = new Map(previous.map((issue) => [issue.id, issue]))
 	return fresh.map((issue) => {
 		const prior = previousById.get(issue.id)
-		return prior ? { ...issue, firstDetected: prior.firstDetected } : issue
+		if (!prior) return issue
+		return {
+			...issue,
+			firstDetected: prior.firstDetected,
+			...(prior.refinement !== undefined ? { refinement: prior.refinement } : {})
+		}
 	})
 }

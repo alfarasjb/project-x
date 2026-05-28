@@ -20,7 +20,7 @@ export type AnthropicModel = (typeof AI_MODELS)[keyof typeof AI_MODELS]
 
 export type Provider = "anthropic"
 
-export type Operation = "analyze-node"
+export type Operation = "analyze-node" | "refine-duplicate-cluster"
 
 export interface ChainEntry {
 	provider: Provider
@@ -31,7 +31,12 @@ export const FALLBACK_CHAINS: Record<Operation, readonly ChainEntry[]> = {
 	// Haiku is the right tool: one-paragraph classify + describe doesn't need
 	// Sonnet/Opus and Haiku is ~10x cheaper per token. Reconsider only if a
 	// 50-node sample shows obvious quality regressions.
-	"analyze-node": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_HAIKU }]
+	"analyze-node": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_HAIKU }],
+	// Sonnet, not Haiku: judging whether N files genuinely duplicate (and
+	// splitting out proximity-only members) is a reasoning task where Haiku
+	// over-confidently merges. This runs on a handful of clusters per analyze,
+	// not every node, so the cost delta is small.
+	"refine-duplicate-cluster": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }]
 }
 
 export interface TaskConfig {
@@ -43,7 +48,11 @@ export const TASK_CONFIGS: Record<Operation, TaskConfig> = {
 	// Low temp because we want stable classifications across crawls; 800 tokens
 	// is plenty for the `analyze_node` tool_use payload (classification enum +
 	// 1-2 sentence what + optional why).
-	"analyze-node": { temperature: 0.2, maxOutputTokens: 800 }
+	"analyze-node": { temperature: 0.2, maxOutputTokens: 800 },
+	// Slightly higher temp than analyze (still low) and a bigger budget: the
+	// payload is verdict + 2-4 sentence reasoning + a consolidation paragraph +
+	// an optional excluded list.
+	"refine-duplicate-cluster": { temperature: 0.3, maxOutputTokens: 1200 }
 }
 
 /**

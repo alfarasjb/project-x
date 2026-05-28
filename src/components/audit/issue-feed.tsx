@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Search } from "lucide-react"
-import type { Issue, IssueSeverity } from "@shared/schemas/issue"
+import type { Issue, IssueSeverity, RefinementVerdict } from "@shared/schemas/issue"
 import { issuesQueryOptions } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
@@ -172,7 +172,9 @@ function IssueRow({
 				className={cn(
 					"flex w-full items-start gap-3 border-l-2 py-2.5 pr-3 pl-3 text-left transition-colors",
 					SEVERITY_BORDER[issue.severity],
-					selected ? "bg-muted/60" : "hover:bg-muted/30"
+					selected ? "bg-muted/60" : "hover:bg-muted/30",
+					// A vetoed duplicate stays in the feed (the receipt) but dimmed.
+					issue.refinement?.verdict === "false-positive" && "opacity-55"
 				)}
 			>
 				<div className="min-w-0 flex-1">
@@ -194,6 +196,11 @@ function IssueRow({
 						{issue.concerns && issue.concerns.length > 0 && (
 							<span>
 								{issue.concerns.length} concern{issue.concerns.length === 1 ? "" : "s"}
+							</span>
+						)}
+						{issue.refinement && (
+							<span className={cn("font-medium", VERDICT_TEXT[issue.refinement.verdict])}>
+								{VERDICT_SHORT[issue.refinement.verdict]}
 							</span>
 						)}
 						<span>{formatDetected(issue.firstDetected)}</span>
@@ -328,6 +335,8 @@ function matchesSearch(issue: Issue, query: string): boolean {
 	if (issue.affected.some((path) => path.toLowerCase().includes(query))) return true
 	if (issue.concerns?.some((concern) => concern.message.toLowerCase().includes(query))) return true
 	if (issue.description.toLowerCase().includes(query)) return true
+	if (issue.refinement?.reasoning.toLowerCase().includes(query)) return true
+	if (issue.refinement?.consolidation?.toLowerCase().includes(query)) return true
 	return false
 }
 
@@ -383,4 +392,17 @@ const SEVERITY_BORDER: Record<IssueSeverity, string> = {
 	critical: "border-l-destructive",
 	warning: "border-l-amber-500/70",
 	info: "border-l-border"
+}
+
+/** Compact verdict label + colour for a refined duplicate row. */
+const VERDICT_SHORT: Record<RefinementVerdict, string> = {
+	duplicate: "verified duplicate",
+	partial: "partial overlap",
+	"false-positive": "vetoed"
+}
+
+const VERDICT_TEXT: Record<RefinementVerdict, string> = {
+	duplicate: "text-amber-600 dark:text-amber-400",
+	partial: "text-blue-600 dark:text-blue-400",
+	"false-positive": "text-muted-foreground"
 }
