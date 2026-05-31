@@ -25,6 +25,8 @@ export const routes = {
 	projects: "/$orgSlug/projects",
 	project: "/$orgSlug/projects/$projectSlug",
 	projectGraph: "/$orgSlug/projects/$projectSlug/graph",
+	projectFeatureFlows: "/$orgSlug/projects/$projectSlug/feature-flows",
+	projectFeatureFlow: "/$orgSlug/projects/$projectSlug/feature-flows/$flowId",
 	projectSettings: "/$orgSlug/projects/$projectSlug/settings",
 	settings: "/$orgSlug/settings",
 	settingsAccount: "/$orgSlug/settings/account",
