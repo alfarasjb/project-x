@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { LayoutDashboard, LogOut, Settings, Workflow } from "lucide-react"
+import { LayoutDashboard, LogOut, Settings, Waypoints, Workflow } from "lucide-react"
 import { authClient } from "@/lib/auth-client"
 import { orgsQueryOptions } from "@/lib/auth-queries"
 import { queryKeys } from "@/lib/query-keys"
@@ -79,6 +79,14 @@ export function Sidebar() {
 						<Link to={routes.projectGraph} params={{ orgSlug, projectSlug }} className={LINK}>
 							<Workflow className="size-4 shrink-0" />
 							Graph
+						</Link>
+						<Link
+							to={routes.projectFeatureFlows}
+							params={{ orgSlug, projectSlug }}
+							className={LINK}
+						>
+							<Waypoints className="size-4 shrink-0" />
+							Feature Flows
 						</Link>
 						<Link to={routes.projectSettings} params={{ orgSlug, projectSlug }} className={LINK}>
 							<Settings className="size-4 shrink-0" />
