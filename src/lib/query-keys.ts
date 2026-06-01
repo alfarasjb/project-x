@@ -25,7 +25,10 @@ export const queryKeys = {
 		all: (id: string) => ["project", id] as const,
 		summary: (id: string) => queryKeys.project.all(id),
 		graph: (id: string) => [...queryKeys.project.all(id), "graph"] as const,
-		issues: (id: string) => [...queryKeys.project.all(id), "issues"] as const
+		issues: (id: string) => [...queryKeys.project.all(id), "issues"] as const,
+		featureFlows: (id: string) => [...queryKeys.project.all(id), "feature-flows"] as const,
+		featureFlow: (id: string, slug: string) =>
+			[...queryKeys.project.featureFlows(id), slug] as const
 	},
 	integrations: {
 		all: ["integrations"] as const,

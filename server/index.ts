@@ -11,6 +11,7 @@ import fastifyStatic from "@fastify/static"
 import { authRoutes } from "@server/routes/auth"
 import { projectRoutes } from "@server/routes/projects"
 import { graphRoutes } from "@server/routes/graph"
+import { featureFlowRoutes } from "@server/routes/feature-flows"
 import { issueRoutes } from "@server/routes/issues"
 import { integrationRoutes } from "@server/routes/integrations"
 import { AppError } from "@server/utils/errors"
@@ -63,6 +64,7 @@ app.get("/api/health", () => ({
 await app.register(authRoutes)
 await app.register(projectRoutes)
 await app.register(graphRoutes)
+await app.register(featureFlowRoutes)
 await app.register(issueRoutes)
 await app.register(integrationRoutes)
 

@@ -1,5 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
+import { useQuery } from "@tanstack/react-query"
 import { ArrowRight, Sparkles, Waypoints, Wand2 } from "lucide-react"
+import type { FeatureFlowSummary } from "@shared/schemas/feature-flow"
+import { featureFlowsQueryOptions } from "@/lib/queries"
 import { routes } from "@/lib/routes"
 
 export const Route = createFileRoute("/$orgSlug/projects/$projectSlug/feature-flows/")({
@@ -8,6 +11,9 @@ export const Route = createFileRoute("/$orgSlug/projects/$projectSlug/feature-fl
 
 /** Stable id for the hand-authored Project X co-pilot example flow (ARG-25 dev fixture). */
 const CO_PILOT_EXAMPLE_ID = "example-co-pilot"
+
+// Parent does slug → id resolution; read the project id from its loader data.
+const parentRoute = getRouteApi(routes.project)
 
 /**
  * Feature Flows list — the launching pad for AI-derived per-feature views of
@@ -19,11 +25,14 @@ const CO_PILOT_EXAMPLE_ID = "example-co-pilot"
  *   2. **Create-time** — user describes a feature; the agent drafts the flow
  *      and anchors it to the parsed graph (ARG-11).
  *
- * Until those land, the page renders the explainer + an empty state + a small
- * dev-only link to the hand-authored co-pilot fixture (ARG-25 scaffold).
+ * Persistence (ARG-26) is live: saved flows render from the `feature_flows`
+ * table in "Your flows". Until the AI paths ship, flows arrive via the seed.
+ * The hand-authored co-pilot fixture stays as a dev-only example below.
  */
 function FeatureFlowsListRoute() {
 	const { orgSlug, projectSlug } = Route.useParams()
+	const { projectId } = parentRoute.useLoaderData()
+	const { data: flows, isPending } = useQuery(featureFlowsQueryOptions(projectId))
 
 	return (
 		<div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-6">
@@ -68,13 +77,19 @@ function FeatureFlowsListRoute() {
 				<h2 className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
 					Your flows
 				</h2>
-				<div className="border-border bg-card/30 flex flex-col items-center gap-1.5 rounded-lg border border-dashed px-6 py-10 text-center">
-					<div className="text-foreground text-xs font-medium">No flows yet</div>
-					<p className="text-muted-foreground max-w-md text-[11px] leading-relaxed">
-						Both creation paths are intent — the list populates when analyze-time AI distillation
-						(ARG-10) or agent drafting (ARG-11) ship.
-					</p>
-				</div>
+				{isPending ? (
+					<FlowsPlaceholder text="Loading flows…" />
+				) : flows && flows.length > 0 ? (
+					<ul className="flex flex-col gap-2">
+						{flows.map((flow) => (
+							<li key={flow.id}>
+								<FlowCard orgSlug={orgSlug} projectSlug={projectSlug} flow={flow} />
+							</li>
+						))}
+					</ul>
+				) : (
+					<FlowsPlaceholder text="No flows yet — they populate from the seed today, and from analyze-time AI distillation (ARG-10) or agent drafting (ARG-11) once those ship." />
+				)}
 			</section>
 
 			<section className="border-border flex flex-col gap-2 border-t pt-5">
@@ -98,6 +113,45 @@ function FeatureFlowsListRoute() {
 					<ArrowRight className="text-muted-foreground group-hover:text-foreground size-3.5 shrink-0 transition-colors" />
 				</Link>
 			</section>
+		</div>
+	)
+}
+
+/** One saved flow in "Your flows" — links to its canvas by slug. */
+function FlowCard({
+	orgSlug,
+	projectSlug,
+	flow
+}: {
+	orgSlug: string
+	projectSlug: string
+	flow: FeatureFlowSummary
+}) {
+	return (
+		<Link
+			to={routes.projectFeatureFlow}
+			params={{ orgSlug, projectSlug, flowId: flow.slug }}
+			className="border-border hover:border-foreground/30 hover:bg-muted/40 group flex items-center gap-3 rounded-lg border p-3 transition-colors"
+		>
+			<div className="bg-muted text-muted-foreground group-hover:text-foreground flex size-8 shrink-0 items-center justify-center rounded-md transition-colors">
+				<Waypoints className="size-4" />
+			</div>
+			<div className="min-w-0 flex-1">
+				<div className="text-xs font-medium">{flow.name}</div>
+				<div className="text-muted-foreground mt-0.5 truncate text-[11px]">
+					{flow.description ?? `${flow.nodeCount} nodes · ${flow.edgeCount} edges`}
+				</div>
+			</div>
+			<ArrowRight className="text-muted-foreground group-hover:text-foreground size-3.5 shrink-0 transition-colors" />
+		</Link>
+	)
+}
+
+/** Dashed placeholder box used for both the loading and empty states. */
+function FlowsPlaceholder({ text }: { text: string }) {
+	return (
+		<div className="border-border bg-card/30 flex flex-col items-center gap-1.5 rounded-lg border border-dashed px-6 py-10 text-center">
+			<p className="text-muted-foreground max-w-md text-[11px] leading-relaxed">{text}</p>
 		</div>
 	)
 }

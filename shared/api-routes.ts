@@ -21,6 +21,8 @@ export const apiRoutePatterns = {
 	projectCrawl: "/api/projects/:id/graph/crawl",
 	projectAnalyze: "/api/projects/:id/analyze",
 	projectIssues: "/api/projects/:id/issues",
+	projectFeatureFlows: "/api/projects/:id/feature-flows",
+	projectFeatureFlow: "/api/projects/:id/feature-flows/:flowSlug",
 	taskRun: "/api/task-runs/:runId",
 	integrationGithub: "/api/integrations/github",
 	integrationGithubDisconnect: "/api/integrations/github/disconnect",
@@ -37,6 +39,9 @@ export const apiRoutes = {
 	projectCrawl: (id: string) => `/api/projects/${id}/graph/crawl`,
 	projectAnalyze: (id: string) => `/api/projects/${id}/analyze`,
 	projectIssues: (id: string) => `/api/projects/${id}/issues`,
+	projectFeatureFlows: (id: string) => `/api/projects/${id}/feature-flows`,
+	projectFeatureFlow: (id: string, flowSlug: string) =>
+		`/api/projects/${id}/feature-flows/${flowSlug}`,
 	taskRun: (runId: string) => `/api/task-runs/${runId}`,
 	integrationGithub: "/api/integrations/github",
 	integrationGithubDisconnect: "/api/integrations/github/disconnect",

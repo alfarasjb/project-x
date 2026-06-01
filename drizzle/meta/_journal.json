@@ -36,6 +36,13 @@
 			"when": 1779797261455,
 			"tag": "0004_real_roland_deschain",
 			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1780331569584,
+			"tag": "0005_slim_smiling_tiger",
+			"breakpoints": true
 		}
 	]
 }
