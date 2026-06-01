@@ -26,6 +26,7 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:seed": "tsx --tsconfig tsconfig.server.json server/db/seed.ts",
+		"db:seed:flows": "tsx --tsconfig tsconfig.server.json server/db/seed-feature-flows.ts",
 		"db:studio": "drizzle-kit studio",
 		"prepare": "husky"
 	},

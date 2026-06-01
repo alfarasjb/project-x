@@ -3,6 +3,7 @@ import { z } from "zod"
 import { apiRoutes } from "@shared/api-routes"
 import { GraphSchema } from "@shared/schemas/graph"
 import { IssuesSchema } from "@shared/schemas/issue"
+import { FeatureFlowSchema, FeatureFlowsSchema } from "@shared/schemas/feature-flow"
 import { ProjectSchema } from "@shared/schemas/project"
 import { GithubReposSchema, GithubStatusSchema } from "@shared/schemas/integrations"
 import { apiGet } from "./api"
@@ -50,6 +51,20 @@ export const issuesQueryOptions = (projectId: string) =>
 	queryOptions({
 		queryKey: queryKeys.project.issues(projectId),
 		queryFn: () => apiGet(apiRoutes.projectIssues(projectId), IssuesSchema)
+	})
+
+/** A project's saved feature flows (summaries — no graph). */
+export const featureFlowsQueryOptions = (projectId: string) =>
+	queryOptions({
+		queryKey: queryKeys.project.featureFlows(projectId),
+		queryFn: () => apiGet(apiRoutes.projectFeatureFlows(projectId), FeatureFlowsSchema)
+	})
+
+/** One feature flow (with its graph), resolved by per-project slug. */
+export const featureFlowQueryOptions = (projectId: string, slug: string) =>
+	queryOptions({
+		queryKey: queryKeys.project.featureFlow(projectId, slug),
+		queryFn: () => apiGet(apiRoutes.projectFeatureFlow(projectId, slug), FeatureFlowSchema)
 	})
 
 /** Current user's GitHub integration status (configured / connected / login). */
