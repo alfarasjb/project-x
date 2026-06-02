@@ -99,10 +99,14 @@ async function main(): Promise<void> {
 
 	// ── 2 & 3. Personal org + owner membership ─────────────────────────────────
 	// One transaction so we never persist an org without its owner member (a
-	// broken, inaccessible workspace). Each insert is idempotent on its own unique
-	// index — organization.slug and member (organizationId, userId) — so a re-run
-	// is a no-op. `id` is a fresh UUID each run, so the PK never collides; the only
-	// reachable conflict is the intended idempotency key.
+	// broken, inaccessible workspace). This tx guarantees org↔member only — the
+	// user + credential writes in step 1 run separately (better-auth's internal
+	// adapter, not transactable through this `tx` handle), so a crash between
+	// steps 1 and 2 can leave a user with no org; the idempotent rerun back-fills
+	// it. Each insert is idempotent on its own unique index — organization.slug
+	// and member (organizationId, userId) — so a re-run is a no-op. `id` is a
+	// fresh UUID each run, so the PK never collides; the only reachable conflict
+	// is the intended idempotency key.
 	await db.transaction(async (tx) => {
 		await tx
 			.insert(organization)
@@ -142,8 +146,7 @@ async function main(): Promise<void> {
 	}
 
 	console.warn(
-		`[seed] verified sign-in for ${DEV_USER.email} (password: ${DEV_USER.password}) ` +
-			`in org "${DEV_ORG.name}" (slug: ${DEV_ORG.slug}).`
+		`[seed] verified sign-in for ${DEV_USER.email} in org "${DEV_ORG.name}" (slug: ${DEV_ORG.slug}).`
 	)
 }
 
