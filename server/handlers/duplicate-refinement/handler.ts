@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises"
-import { posix } from "node:path"
 import { z } from "zod"
 import type { Graph, GraphNode } from "@shared/schemas/graph"
 import {
@@ -8,7 +7,9 @@ import {
 	type Issue
 } from "@shared/schemas/issue"
 import { getAdapter } from "@server/llm/fallback/factory"
-import { hashesUnchanged } from "@server/handlers/source-hashes"
+import { LLM_OPERATIONS } from "@server/llm/fallback/chains"
+import { hashesByPath, hashesUnchanged } from "@server/handlers/source-hashes"
+import { absolutePath } from "@server/handlers/paths"
 import {
 	REFINE_DUPLICATE_SYSTEM_PROMPT,
 	buildRefineDuplicateUserPrompt,
@@ -52,7 +53,7 @@ const REFINE_DUPLICATE_TOOL = {
 export async function refineDuplicateCluster(
 	input: RefineDuplicateClusterInput
 ): Promise<RefineDuplicateOutput> {
-	const adapter = getAdapter("refine-duplicate-cluster")
+	const adapter = getAdapter(LLM_OPERATIONS.REFINE_DUPLICATE_CLUSTER)
 	const userPrompt = buildRefineDuplicateUserPrompt(input)
 	const result = await adapter.generateStructured(
 		{ systemPrompt: REFINE_DUPLICATE_SYSTEM_PROMPT, userPrompt },
@@ -147,15 +148,6 @@ function qualifies(members: readonly GraphNode[], affectedCount: number): boolea
 	return members.every((node) => node.kind === "file")
 }
 
-function hashesByPath(members: readonly GraphNode[]): Record<string, string> {
-	const hashes: Record<string, string> = {}
-	for (const node of members) {
-		const hash = node.metrics?.contentHash
-		if (hash) hashes[node.path] = hash
-	}
-	return hashes
-}
-
 function toRefinement(
 	output: RefineDuplicateOutput,
 	sourceHashes: Record<string, string>
@@ -168,8 +160,4 @@ function toRefinement(
 		...(output.excluded.length > 0 ? { excluded: output.excluded } : {}),
 		sourceHashes
 	}
-}
-
-function absolutePath(sourcePath: string, nodePath: string): string {
-	return posix.join(sourcePath.replace(/\\/g, "/"), nodePath)
 }

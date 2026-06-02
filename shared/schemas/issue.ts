@@ -58,6 +58,31 @@ export const GodFileVerdictSchema = z.enum(["should-split", "partial", "false-po
 export type GodFileVerdict = z.infer<typeof GodFileVerdictSchema>
 
 /**
+ * Verdict from the `refine-circular-dependency` handler — Claude's 1-shot pass
+ * over a heuristic `circular-dependency` finding (a DFS-detected import cycle).
+ *   "break-cycle"    — a genuine harmful cycle (tree-shaking / init-order risk); break it.
+ *   "acceptable"     — a real cycle, but tolerable (type-only or test-only imports). No urgent action.
+ *   "false-positive" — not actually a runtime cycle (e.g. a parser misread). No action.
+ */
+export const CircularDependencyVerdictSchema = z.enum([
+	"break-cycle",
+	"acceptable",
+	"false-positive"
+])
+export type CircularDependencyVerdict = z.infer<typeof CircularDependencyVerdictSchema>
+
+/**
+ * Verdict from the `refine-boundary-violation` agent-loop handler — Claude
+ * traverses the flagged source file's graph neighbourhood to judge whether a
+ * cross-layer import is a real architectural breach.
+ *   "violation"      — a genuine boundary breach; the import should be removed or rerouted. Provide remediation.
+ *   "acceptable"     — crosses a layer but justified (a composition root, a thin re-export, an intentional exception). No action.
+ *   "false-positive" — the classification was wrong, so it isn't really a cross-layer edge. No action.
+ */
+export const BoundaryViolationVerdictSchema = z.enum(["violation", "acceptable", "false-positive"])
+export type BoundaryViolationVerdict = z.infer<typeof BoundaryViolationVerdictSchema>
+
+/**
  * Second-pass LLM refinement attached to an issue — a discriminated union keyed
  * on `kind`, one variant per handler. Written in place on the issue row by the
  * handler; absent until refined. `sourceHashes` (on every variant) maps each
@@ -94,9 +119,33 @@ export const GodFileRefinementSchema = z.object({
 })
 export type GodFileRefinement = z.infer<typeof GodFileRefinementSchema>
 
+/** Circular-dependency verdict. `resolution` is present for break-cycle/acceptable, absent for false-positive. */
+export const CircularDependencyRefinementSchema = z.object({
+	kind: z.literal("circular-dependency"),
+	verdict: CircularDependencyVerdictSchema,
+	reasoning: z.string().min(1),
+	/** Plain-text advice on how to break (or why to tolerate) the cycle. Absent for false-positive. */
+	resolution: z.string().min(1).optional(),
+	sourceHashes: z.record(z.string(), z.string())
+})
+export type CircularDependencyRefinement = z.infer<typeof CircularDependencyRefinementSchema>
+
+/** Boundary-violation verdict. `remediation` is present for violation, absent otherwise. */
+export const BoundaryViolationRefinementSchema = z.object({
+	kind: z.literal("boundary-violation"),
+	verdict: BoundaryViolationVerdictSchema,
+	reasoning: z.string().min(1),
+	/** Plain-text advice on how to reroute the import. Absent for acceptable/false-positive. */
+	remediation: z.string().min(1).optional(),
+	sourceHashes: z.record(z.string(), z.string())
+})
+export type BoundaryViolationRefinement = z.infer<typeof BoundaryViolationRefinementSchema>
+
 const RefinementUnionSchema = z.discriminatedUnion("kind", [
 	DuplicateRefinementSchema,
-	GodFileRefinementSchema
+	GodFileRefinementSchema,
+	CircularDependencyRefinementSchema,
+	BoundaryViolationRefinementSchema
 ])
 
 /**

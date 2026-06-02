@@ -2,6 +2,8 @@ import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Search } from "lucide-react"
 import type {
+	BoundaryViolationVerdict,
+	CircularDependencyVerdict,
 	GodFileVerdict,
 	Issue,
 	IssueRefinement,
@@ -179,8 +181,8 @@ function IssueRow({
 					"flex w-full items-start gap-3 border-l-2 py-2.5 pr-3 pl-3 text-left transition-colors",
 					SEVERITY_BORDER[issue.severity],
 					selected ? "bg-muted/60" : "hover:bg-muted/30",
-					// A false-positive verdict (dismissed duplicate OR "not a god file")
-					// stays in the feed as the receipt, but dimmed.
+					// A false-positive verdict (the LLM dismissed the finding, in any
+					// category) stays in the feed as the receipt, but dimmed.
 					issue.refinement?.verdict === "false-positive" && "opacity-55"
 				)}
 			>
@@ -353,6 +355,16 @@ function matchesSearch(issue: Issue, query: string): boolean {
 		issue.refinement.splitPlan?.toLowerCase().includes(query)
 	)
 		return true
+	if (
+		issue.refinement?.kind === "circular-dependency" &&
+		issue.refinement.resolution?.toLowerCase().includes(query)
+	)
+		return true
+	if (
+		issue.refinement?.kind === "boundary-violation" &&
+		issue.refinement.remediation?.toLowerCase().includes(query)
+	)
+		return true
 	return false
 }
 
@@ -411,8 +423,8 @@ const SEVERITY_BORDER: Record<IssueSeverity, string> = {
 }
 
 /**
- * Compact verdict label for a refined row. Keyed by kind THEN verdict because
- * "partial"/"false-positive" exist in both vocabularies but read differently.
+ * Compact verdict label for a refined row. Keyed by kind THEN verdict because a
+ * shared verdict like "false-positive" reads differently across the four kinds.
  */
 const DUPLICATE_VERDICT_SHORT: Record<RefinementVerdict, string> = {
 	duplicate: "verified duplicate",
@@ -426,16 +438,41 @@ const GOD_FILE_VERDICT_SHORT: Record<GodFileVerdict, string> = {
 	"false-positive": "not a god file"
 }
 
-function verdictShort(refinement: IssueRefinement): string {
-	return refinement.kind === "duplicate"
-		? DUPLICATE_VERDICT_SHORT[refinement.verdict]
-		: GOD_FILE_VERDICT_SHORT[refinement.verdict]
+const CIRCULAR_VERDICT_SHORT: Record<CircularDependencyVerdict, string> = {
+	"break-cycle": "break the cycle",
+	acceptable: "acceptable cycle",
+	"false-positive": "not a real cycle"
 }
 
-/** Colour is keyed by verdict alone — the palette maps cleanly across both kinds. */
-const VERDICT_TEXT: Record<RefinementVerdict | GodFileVerdict, string> = {
+const BOUNDARY_VERDICT_SHORT: Record<BoundaryViolationVerdict, string> = {
+	violation: "violation",
+	acceptable: "acceptable",
+	"false-positive": "not a violation"
+}
+
+function verdictShort(refinement: IssueRefinement): string {
+	switch (refinement.kind) {
+		case "duplicate":
+			return DUPLICATE_VERDICT_SHORT[refinement.verdict]
+		case "god-file":
+			return GOD_FILE_VERDICT_SHORT[refinement.verdict]
+		case "circular-dependency":
+			return CIRCULAR_VERDICT_SHORT[refinement.verdict]
+		case "boundary-violation":
+			return BOUNDARY_VERDICT_SHORT[refinement.verdict]
+	}
+}
+
+/** Colour is keyed by verdict alone — the palette maps cleanly across all kinds. */
+const VERDICT_TEXT: Record<
+	RefinementVerdict | GodFileVerdict | CircularDependencyVerdict | BoundaryViolationVerdict,
+	string
+> = {
 	duplicate: "text-amber-600 dark:text-amber-400",
 	"should-split": "text-amber-600 dark:text-amber-400",
+	"break-cycle": "text-amber-600 dark:text-amber-400",
+	violation: "text-amber-600 dark:text-amber-400",
 	partial: "text-blue-600 dark:text-blue-400",
+	acceptable: "text-blue-600 dark:text-blue-400",
 	"false-positive": "text-muted-foreground"
 }

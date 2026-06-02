@@ -1,6 +1,8 @@
 import type { Eye } from "lucide-react"
 import { EyeOff, Inbox, MessageCircle, Network, X } from "lucide-react"
 import type {
+	BoundaryViolationVerdict,
+	CircularDependencyVerdict,
 	GodFileVerdict,
 	Issue,
 	IssueRefinement,
@@ -114,6 +116,26 @@ export function IssueDetailPanel({ issue, onClose }: { issue: Issue | null; onCl
 								</ul>
 							</div>
 						)}
+					{issue.refinement.kind === "circular-dependency" && issue.refinement.resolution && (
+						<div className="mt-3">
+							<div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase tracking-wide">
+								How to resolve
+							</div>
+							<p className="text-sm leading-relaxed whitespace-pre-line">
+								{issue.refinement.resolution}
+							</p>
+						</div>
+					)}
+					{issue.refinement.kind === "boundary-violation" && issue.refinement.remediation && (
+						<div className="mt-3">
+							<div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase tracking-wide">
+								How to reroute
+							</div>
+							<p className="text-sm leading-relaxed whitespace-pre-line">
+								{issue.refinement.remediation}
+							</p>
+						</div>
+					)}
 				</Section>
 			)}
 
@@ -214,8 +236,9 @@ const SEVERITY_LABEL_COLOR: Record<IssueSeverity, string> = {
 	info: "text-blue-600 dark:text-blue-400"
 }
 
-// Verdict presentation is keyed by kind THEN verdict: "partial"/"false-positive"
-// exist in both vocabularies but read differently (a duplicate vs a god file).
+// Verdict presentation is keyed by kind THEN verdict: a shared verdict like
+// "false-positive" exists across kinds but reads differently per kind (a
+// non-duplicate vs a healthy file vs a benign cycle vs an allowed import).
 const DUPLICATE_VERDICT_LABEL: Record<RefinementVerdict, string> = {
 	duplicate: "Duplicate",
 	partial: "Partial overlap",
@@ -228,17 +251,42 @@ const GOD_FILE_VERDICT_LABEL: Record<GodFileVerdict, string> = {
 	"false-positive": "Not a god file"
 }
 
-const VERDICT_STYLE_BY_VERDICT: Record<RefinementVerdict | GodFileVerdict, string> = {
+const CIRCULAR_VERDICT_LABEL: Record<CircularDependencyVerdict, string> = {
+	"break-cycle": "Break the cycle",
+	acceptable: "Acceptable cycle",
+	"false-positive": "Not a real cycle"
+}
+
+const BOUNDARY_VERDICT_LABEL: Record<BoundaryViolationVerdict, string> = {
+	violation: "Violation",
+	acceptable: "Acceptable",
+	"false-positive": "Not a violation"
+}
+
+const VERDICT_STYLE_BY_VERDICT: Record<
+	RefinementVerdict | GodFileVerdict | CircularDependencyVerdict | BoundaryViolationVerdict,
+	string
+> = {
 	duplicate: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
 	"should-split": "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+	"break-cycle": "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+	violation: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
 	partial: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+	acceptable: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
 	"false-positive": "bg-muted text-muted-foreground"
 }
 
 function verdictLabel(refinement: IssueRefinement): string {
-	return refinement.kind === "duplicate"
-		? DUPLICATE_VERDICT_LABEL[refinement.verdict]
-		: GOD_FILE_VERDICT_LABEL[refinement.verdict]
+	switch (refinement.kind) {
+		case "duplicate":
+			return DUPLICATE_VERDICT_LABEL[refinement.verdict]
+		case "god-file":
+			return GOD_FILE_VERDICT_LABEL[refinement.verdict]
+		case "circular-dependency":
+			return CIRCULAR_VERDICT_LABEL[refinement.verdict]
+		case "boundary-violation":
+			return BOUNDARY_VERDICT_LABEL[refinement.verdict]
+	}
 }
 
 function verdictStyle(refinement: IssueRefinement): string {

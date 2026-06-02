@@ -5,7 +5,7 @@ import { getDb } from "@server/db"
 import { nodeEmbeddings, type NewNodeEmbedding } from "@server/db/schema/embeddings"
 import { env } from "@server/env"
 import { getEmbeddingAdapter } from "@server/llm/fallback/factory"
-import { EMBEDDING_CHAINS } from "@server/llm/fallback/chains"
+import { EMBEDDING_CHAINS, EMBEDDING_OPERATIONS } from "@server/llm/fallback/chains"
 import { VOYAGE_BATCH_LIMIT } from "@server/llm/adapters/voyage"
 import { buildEmbeddingDocument } from "@server/domain/embeddings/document"
 
@@ -111,8 +111,8 @@ async function runEmbed(
 	projectId: string,
 	toEmbed: readonly { node: GraphNode; text: string; hash: string }[]
 ): Promise<{ embedded: number; failed: number }> {
-	const adapter = getEmbeddingAdapter("embed-node")
-	const chainEntry = EMBEDDING_CHAINS["embed-node"][0]
+	const adapter = getEmbeddingAdapter(EMBEDDING_OPERATIONS.EMBED_NODE)
+	const chainEntry = EMBEDDING_CHAINS[EMBEDDING_OPERATIONS.EMBED_NODE][0]
 	if (!chainEntry) {
 		throw new Error('No embedding chain configured for "embed-node"')
 	}
