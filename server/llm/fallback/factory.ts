@@ -1,3 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk"
 import { AnthropicAdapter } from "@server/llm/adapters/anthropic"
 import { AnthropicAgentAdapter } from "@server/llm/adapters/anthropic-agent"
 import { VoyageAdapter } from "@server/llm/adapters/voyage"
@@ -132,6 +133,56 @@ function buildAgentProviderAdapter(
 }
 
 /**
+ * A configured Anthropic client plus the resolved model + per-call config for a
+ * streaming agent operation. The hand-wired loop in `server/agent/` needs the raw
+ * client (to call `messages.stream`), not the batch `AgentAdapter` — but it still
+ * draws its model id + knobs from the central registry, so model upgrades stay a
+ * one-line edit in `chains.ts`.
+ */
+export interface AnthropicAgentRuntime {
+	client: Anthropic
+	model: string
+	taskConfig: TaskConfig
+}
+
+/** One Anthropic HTTP client, shared by every streaming agent operation. */
+let streamingAnthropicClient: Anthropic | null = null
+
+function getStreamingAnthropicClient(): Anthropic {
+	if (!env.ANTHROPIC_API_KEY) {
+		throw new MissingProviderKeyError("anthropic", "ANTHROPIC_API_KEY")
+	}
+	streamingAnthropicClient ??= new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
+	return streamingAnthropicClient
+}
+
+/**
+ * Resolve the streaming runtime for an agent operation: the shared Anthropic
+ * client + the operation's configured model + its `TaskConfig`. Distinct from
+ * `getAgentAdapter`, which returns the batch (terminal-tool) `AgentAdapter` —
+ * the wrong contract for an open-ended streaming chat loop. Anthropic-only today;
+ * the `never` keeps adding a provider a compile error here until it's handled.
+ */
+export function getStreamingAgentRuntime(operation: AgentOperation): AnthropicAgentRuntime {
+	const entry = FALLBACK_CHAINS[operation][0]
+	if (!entry) {
+		throw new Error(`No chain configured for agent operation "${operation}"`)
+	}
+	switch (entry.provider) {
+		case "anthropic":
+			return {
+				client: getStreamingAnthropicClient(),
+				model: entry.model,
+				taskConfig: TASK_CONFIGS[operation]
+			}
+		default: {
+			const exhaustive: never = entry.provider
+			throw new Error(`Streaming agent runtime: unhandled provider ${exhaustive as string}`)
+		}
+	}
+}
+
+/**
  * Get (or build) the embedding adapter for an embedding operation. v1 has no
  * fallback chain (one entry per operation), so this returns the underlying
  * adapter directly rather than wrapping it — adding a `FallbackEmbeddingAdapter`
@@ -215,4 +266,5 @@ export function clearAdapterCache(): void {
 	agentAdapterCache.clear()
 	embeddingAdapterCache.clear()
 	embeddingProviderCache.clear()
+	streamingAnthropicClient = null
 }

@@ -1,24 +1,21 @@
 /**
  * QA Agent chat — the typed seam between the UI and whatever produces messages.
  *
- * Today the producer is a hand-authored mock (`@/data/agent-chat-mock`). When
- * ARG-37 lands the real server loop (which depends on ARG-9's `server/tools/`),
- * it swaps the mock for a transport that streams the SAME `ChatEvent` shape —
- * the store's reducer and every component below it stay untouched.
+ * The wire events (`ChatEvent`) and their sub-types now live in the shared Zod
+ * schema (`@shared/schemas/chat`) — ARG-37's server loop validates against it and
+ * the frontend infers from it, so the contract can't drift. We re-export those
+ * here so existing `@/components/graph/agent/types` imports keep resolving; the
+ * render-state shapes (`ToolCall`, `ChatMessage`, `ChatTransport`) stay local
+ * because they're UI concerns, not wire.
  *
  * The event stream is deliberately transport-agnostic: a `ChatTransport` is
  * just `(userText) => AsyncIterable<ChatEvent>`, which an SSE / ReadableStream /
  * WebSocket source maps onto without reshaping this contract.
- *
- * Local on purpose — no `shared/schemas` Zod wire schema yet, because the
- * ARG-9/ARG-37 server contract doesn't exist. These types ARE the seam until
- * it does.
  */
 
-/** Who authored a message. Tool activity hangs off an assistant turn, below. */
-export type ChatRole = "user" | "assistant"
+import type { ChatEvent, ChatRole, ToolCallStatus } from "@shared/schemas/chat"
 
-export type ToolCallStatus = "running" | "done" | "error"
+export type { ChatEvent, ChatRole, ToolCallStatus }
 
 /** A single tool invocation surfaced inside an assistant turn. */
 export interface ToolCall {
@@ -46,30 +43,7 @@ export interface ChatMessage {
 }
 
 /**
- * The wire between transport and store. The store reduces these into
- * `ChatMessage` state via a single pure reducer, so a real transport only has
- * to emit the same events to drive the same UI.
- */
-export type ChatEvent =
-	| { type: "message-start"; messageId: string; role: "assistant" }
-	| { type: "text-delta"; messageId: string; delta: string }
-	| {
-			type: "tool-call-start"
-			messageId: string
-			toolCall: Pick<ToolCall, "id" | "name" | "argsSummary">
-	  }
-	| {
-			type: "tool-call-end"
-			messageId: string
-			toolCallId: string
-			status: Exclude<ToolCallStatus, "running">
-			resultSummary?: string
-			error?: string
-	  }
-	| { type: "message-end"; messageId: string }
-
-/**
  * The seam contract ARG-37 implements. Given the user's text, yield events.
  * The mock is the current implementation; the real server loop is a drop-in.
  */
-export type ChatTransport = (userText: string) => AsyncIterable<ChatEvent>
+export type ChatTransport = (userText: string, signal?: AbortSignal) => AsyncIterable<ChatEvent>

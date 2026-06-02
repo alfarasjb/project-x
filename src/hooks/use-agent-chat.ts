@@ -1,5 +1,5 @@
-import { useCallback } from "react"
-import { mockChatTransport } from "@/data/agent-chat-mock"
+import { useCallback, useEffect, useMemo } from "react"
+import { createAgentChatTransport } from "@/data/agent-chat-transport"
 import { useAgentChatStore, type ChatStatus } from "@/stores/agent-chat-store"
 import type { ChatMessage } from "@/components/graph/agent/types"
 
@@ -12,22 +12,28 @@ export interface UseAgentChat {
 }
 
 /**
- * The QA Agent chat seam. Wires the chat store to a `ChatTransport`; today that
- * is the mock. When ARG-37's server loop lands, this hook is the single place
- * the swap happens — replace `mockChatTransport` with the real transport (or
- * make it injectable) and the store + UI are untouched.
+ * The QA Agent chat seam. Wires the chat store to the real server transport,
+ * scoped to one project. The store + UI are transport-agnostic — they only see
+ * the `ChatEvent` stream — so this hook is the single place the wiring lives.
  */
-export function useAgentChat(): UseAgentChat {
+export function useAgentChat(projectId: string): UseAgentChat {
 	const messages = useAgentChatStore((state) => state.messages)
 	const status = useAgentChatStore((state) => state.status)
 	const runTurn = useAgentChatStore((state) => state.runTurn)
 	const reset = useAgentChatStore((state) => state.reset)
 
+	const transport = useMemo(() => createAgentChatTransport(projectId), [projectId])
+
+	// The store is module-global but scoped to one project at a time. Reset on
+	// project change / unmount so the prior project's transcript is never shown
+	// here, and any in-flight stream is aborted rather than leaked.
+	useEffect(() => () => reset(), [projectId, reset])
+
 	const sendMessage = useCallback(
 		(text: string) => {
-			void runTurn(mockChatTransport, text)
+			void runTurn(transport, text)
 		},
-		[runTurn]
+		[runTurn, transport]
 	)
 
 	return { messages, status, sendMessage, reset }

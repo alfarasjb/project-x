@@ -47,7 +47,7 @@ export class ApiError extends Error {
  * Falls back to the HTTP status line if the body isn't JSON (e.g. a proxy
  * error before the server saw the request).
  */
-async function buildApiError(res: Response): Promise<ApiError> {
+export async function buildApiError(res: Response): Promise<ApiError> {
 	let message = `${res.status} ${res.statusText}`
 	let details: unknown
 	try {

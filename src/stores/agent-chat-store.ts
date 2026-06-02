@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { ApiError } from "@/lib/api"
 import type {
 	ChatEvent,
 	ChatMessage,
@@ -23,6 +24,12 @@ interface AgentChatState {
 	applyEvent: (event: ChatEvent) => void
 	/** Push a user turn onto the stream. */
 	appendUserMessage: (text: string) => void
+	/**
+	 * End a turn that errored: append `text` to the in-flight assistant bubble
+	 * (finalizing it), or start a fresh assistant message when the failure hit
+	 * before any bubble was created.
+	 */
+	failTurn: (text: string) => void
 	reset: () => void
 	/**
 	 * Drive a whole turn: push the user message, enter `thinking`, then consume
@@ -45,6 +52,13 @@ const patchMessage = (
 	messageId: string,
 	patch: (message: ChatMessage) => ChatMessage
 ): ChatMessage[] => messages.map((message) => (message.id === messageId ? patch(message) : message))
+
+/**
+ * Abort handle for the in-flight turn's SSE fetch. Module-scoped (not store
+ * state) because it's an imperative lifecycle handle, not rendered — `reset()`
+ * aborts it on project switch / unmount, and each `runTurn` supersedes it.
+ */
+let activeController: AbortController | null = null
 
 export const useAgentChatStore = create<AgentChatState>((set, get) => ({
 	messages: [],
@@ -109,7 +123,34 @@ export const useAgentChatStore = create<AgentChatState>((set, get) => ({
 			]
 		})),
 
-	reset: () => set({ messages: [], status: "idle" }),
+	failTurn: (text) =>
+		set((state) => {
+			const inFlight = [...state.messages].reverse().find((message) => message.streaming)
+			if (inFlight) {
+				return {
+					messages: patchMessage(state.messages, inFlight.id, (message) => ({
+						...message,
+						text: message.text ? `${message.text}\n\n${text}` : text,
+						streaming: false
+					}))
+				}
+			}
+			return {
+				messages: [
+					...state.messages,
+					{ id: crypto.randomUUID(), role: "assistant", text, toolCalls: [], streaming: false }
+				]
+			}
+		}),
+
+	reset: () => {
+		// Cancel any in-flight stream and drop the transcript — called on project
+		// switch / Agent-tab unmount so one project's chat is never shown under, or
+		// continued into, another.
+		activeController?.abort()
+		activeController = null
+		set({ messages: [], status: "idle" })
+	},
 
 	runTurn: async (transport, userText) => {
 		if (get().status !== "idle") return
@@ -117,16 +158,35 @@ export const useAgentChatStore = create<AgentChatState>((set, get) => ({
 		get().appendUserMessage(userText)
 		set({ status: "thinking" })
 
+		const controller = new AbortController()
+		activeController = controller
+
 		try {
-			for await (const event of transport(userText)) {
+			for await (const event of transport(userText, controller.signal)) {
 				// First content lands → leave the thinking shimmer, start streaming.
 				if (get().status === "thinking") set({ status: "streaming" })
 				get().applyEvent(event)
 			}
+		} catch (error) {
+			// An abort (project switch / unmount via reset) is a silent cancel. Any
+			// other throw is a real failure — a pre-stream ApiError (missing key / no
+			// graph / auth) or a mid-stream bad frame. Surface it and finalize any
+			// bubble left streaming, so the user gets feedback instead of a caret that
+			// blinks forever.
+			if (!controller.signal.aborted) get().failTurn(toErrorText(error))
 		} finally {
-			// Always re-enable the composer — covers normal completion and a
-			// transport that throws mid-stream (a buggy mock, or the future loop).
-			set({ status: "idle" })
+			// Only the current turn owns the lifecycle — a superseded/aborted turn must
+			// not stomp a newer turn's status or clear its controller handle.
+			if (activeController === controller) {
+				activeController = null
+				set({ status: "idle" })
+			}
 		}
 	}
 }))
+
+/** A user-facing line for a failed turn: the server's message for an ApiError, else a generic one. */
+function toErrorText(error: unknown): string {
+	if (error instanceof ApiError) return error.message
+	return "Something went wrong talking to the agent. Please try again."
+}

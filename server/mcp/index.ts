@@ -1,12 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod"
-import {
-	EMPTY_GRAPH,
-	NodeClassificationSchema,
-	type Description,
-	type GraphNode
-} from "@shared/schemas/graph"
+import { EMPTY_GRAPH, NodeClassificationSchema, type Description } from "@shared/schemas/graph"
 import { IssueSeveritySchema, type Issue } from "@shared/schemas/issue"
 import {
 	getProjectGraph,
@@ -14,10 +9,10 @@ import {
 	setNodeClassification,
 	setNodeDescription
 } from "@server/domain/graph"
-import { findSimilarToText } from "@server/domain/embeddings/similarity"
 import { getNodeTool } from "@server/tools/get-node"
 import { listNodesTool } from "@server/tools/list-nodes"
 import { findSimilarToNodeTool } from "@server/tools/find-similar"
+import { findSimilarToTextTool } from "@server/tools/find-similar-to-text"
 import type { ToolDefinition } from "@server/tools/types"
 import { resolveBoundProject } from "@server/mcp/project"
 
@@ -130,6 +125,12 @@ async function main(): Promise<void> {
 		project,
 		"Find nodes similar to one specific node",
 		findSimilarToNodeTool
+	)
+	registerSharedReadTool(
+		server,
+		project,
+		"Search nodes by semantic similarity to a text query",
+		findSimilarToTextTool
 	)
 
 	// --- Tool: set description -----------------------------------------------
@@ -384,76 +385,6 @@ Returns JSON: {
 					concerns: issue.concerns ?? null
 				}
 				return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
-			} catch (error) {
-				return toolError(error)
-			}
-		}
-	)
-
-	// --- Tool: semantic search by text query -------------------------------
-	server.registerTool(
-		"projectx_search_similar_nodes",
-		{
-			title: "Search nodes by semantic similarity to a text query",
-			description: `Find the top-K nodes in "${project.name}" whose descriptions are most semantically similar to a free-form text query. Backed by vector embeddings of each node's path + classification + summary + rationale (Voyage code-3, 1024 dims, cosine distance).
-
-Use this to FIND CODE BY INTENT — "where does auth happen?", "which file handles localStorage?", "is there already a date formatter?". This is the right first move when you're looking for a place to put new code or a primitive that might already exist. Pair with projectx_get_node on the top result to inspect details.
-
-Args:
-  - query (string): the text to search for. Plain English is fine ("save todos to disk"); structural terms work too ("routing layer").
-  - k (number, optional): how many results to return. Default 5, max 25.
-  - kinds (array of "file" | "module", optional): restrict to certain node kinds. Default ["file", "module"] (both).
-
-Returns JSON: { query, count, results: [{ nodeId, kind, distance, classification, summary }] }. Lower distance = better match (0 = identical, ~0.3 = strong, ~0.5 = topical, >0.7 = weak). Empty results = no nodes have been embedded yet (the project must be Analyzed first, which triggers embedding) OR the VOYAGE_API_KEY is unset on the server.`,
-			inputSchema: {
-				query: z.string().min(1).describe("Free-form text to search for."),
-				k: z
-					.number()
-					.int()
-					.min(1)
-					.max(25)
-					.optional()
-					.describe("Top K results to return. Default 5."),
-				kinds: z
-					.array(z.enum(["file", "module"]))
-					.optional()
-					.describe('Restrict to certain node kinds. Default ["file", "module"].')
-			},
-			annotations: {
-				readOnlyHint: true,
-				destructiveHint: false,
-				idempotentHint: true,
-				openWorldHint: false
-			}
-		},
-		async ({ query, k, kinds }) => {
-			try {
-				const graph = (await getProjectGraph(project.id))?.actual ?? EMPTY_GRAPH
-				const nodesById = new Map<string, GraphNode>(graph.nodes.map((n) => [n.id, n]))
-				const results = await findSimilarToText({
-					projectId: project.id,
-					text: query,
-					k: k ?? 5,
-					...(kinds ? { kinds } : {})
-				})
-				const enriched = results.map((r) => {
-					const node = nodesById.get(r.nodeId)
-					return {
-						nodeId: r.nodeId,
-						kind: r.kind,
-						distance: Number(r.distance.toFixed(4)),
-						classification: node?.classification ?? null,
-						summary: node?.description?.what ?? null
-					}
-				})
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify({ query, count: enriched.length, results: enriched }, null, 2)
-						}
-					]
-				}
 			} catch (error) {
 				return toolError(error)
 			}

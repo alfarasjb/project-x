@@ -36,7 +36,8 @@ export type LlmOperation = (typeof LLM_OPERATIONS)[keyof typeof LLM_OPERATIONS]
 /** Multi-step agent-loop operations — served by `getAgentAdapter` (AgentAdapter). */
 export const AGENT_OPERATIONS = {
 	REFINE_GOD_FILE: "refine-god-file",
-	REFINE_BOUNDARY_VIOLATION: "refine-boundary-violation"
+	REFINE_BOUNDARY_VIOLATION: "refine-boundary-violation",
+	QA_AGENT: "qa-agent"
 } as const
 export type AgentOperation = (typeof AGENT_OPERATIONS)[keyof typeof AGENT_OPERATIONS]
 
@@ -82,7 +83,8 @@ export const FALLBACK_CHAINS: Record<Operation, readonly ChainEntry[]> = {
 	// reasoning-over-cost call as the god-file loop; a handful of findings per analyze.
 	[AGENT_OPERATIONS.REFINE_BOUNDARY_VIOLATION]: [
 		{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }
-	]
+	],
+	[AGENT_OPERATIONS.QA_AGENT]: [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }]
 }
 
 export interface TaskConfig {
@@ -108,7 +110,8 @@ export const TASK_CONFIGS: Record<Operation, TaskConfig> = {
 	[LLM_OPERATIONS.REFINE_CIRCULAR_DEPENDENCY]: { temperature: 0.3, maxOutputTokens: 1200 },
 	// Per-turn budget for the boundary agent loop — verdict + reasoning + an
 	// optional remediation paragraph. Step cap lives with the handler.
-	[AGENT_OPERATIONS.REFINE_BOUNDARY_VIOLATION]: { temperature: 0.3, maxOutputTokens: 1500 }
+	[AGENT_OPERATIONS.REFINE_BOUNDARY_VIOLATION]: { temperature: 0.3, maxOutputTokens: 1500 },
+	[AGENT_OPERATIONS.QA_AGENT]: { temperature: 0.3, maxOutputTokens: 2480 }
 }
 
 /**
