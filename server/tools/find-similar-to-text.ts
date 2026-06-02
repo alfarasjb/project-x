@@ -42,7 +42,8 @@ Returns JSON: { query, count, results: [{ nodeId, kind, distance, classification
 			projectId: ctx.projectId,
 			text: input.query,
 			k: input.k ?? 5,
-			...(input.kinds ? { kinds: input.kinds } : {})
+			// findSimilarToText defaults kinds via `?? DEFAULT`, so undefined is fine.
+			kinds: input.kinds
 		})
 		const enriched = results.map((result) => {
 			const node = nodesById.get(result.nodeId)

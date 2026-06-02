@@ -53,6 +53,13 @@ const patchMessage = (
 	patch: (message: ChatMessage) => ChatMessage
 ): ChatMessage[] => messages.map((message) => (message.id === messageId ? patch(message) : message))
 
+/**
+ * Abort handle for the in-flight turn's SSE fetch. Module-scoped (not store
+ * state) because it's an imperative lifecycle handle, not rendered — `reset()`
+ * aborts it on project switch / unmount, and each `runTurn` supersedes it.
+ */
+let activeController: AbortController | null = null
+
 export const useAgentChatStore = create<AgentChatState>((set, get) => ({
 	messages: [],
 	status: "idle",
@@ -136,7 +143,14 @@ export const useAgentChatStore = create<AgentChatState>((set, get) => ({
 			}
 		}),
 
-	reset: () => set({ messages: [], status: "idle" }),
+	reset: () => {
+		// Cancel any in-flight stream and drop the transcript — called on project
+		// switch / Agent-tab unmount so one project's chat is never shown under, or
+		// continued into, another.
+		activeController?.abort()
+		activeController = null
+		set({ messages: [], status: "idle" })
+	},
 
 	runTurn: async (transport, userText) => {
 		if (get().status !== "idle") return
@@ -144,22 +158,29 @@ export const useAgentChatStore = create<AgentChatState>((set, get) => ({
 		get().appendUserMessage(userText)
 		set({ status: "thinking" })
 
+		const controller = new AbortController()
+		activeController = controller
+
 		try {
-			for await (const event of transport(userText)) {
+			for await (const event of transport(userText, controller.signal)) {
 				// First content lands → leave the thinking shimmer, start streaming.
 				if (get().status === "thinking") set({ status: "streaming" })
 				get().applyEvent(event)
 			}
 		} catch (error) {
-			// The transport threw — a pre-stream failure (an ApiError with a
-			// user-facing message: missing key / no graph / auth) or a mid-stream
-			// one (a bad SSE frame). Surface it in the chat and finalize any bubble
-			// left streaming, so the user gets feedback instead of a silent failure
-			// or a caret that blinks forever.
-			get().failTurn(toErrorText(error))
+			// An abort (project switch / unmount via reset) is a silent cancel. Any
+			// other throw is a real failure — a pre-stream ApiError (missing key / no
+			// graph / auth) or a mid-stream bad frame. Surface it and finalize any
+			// bubble left streaming, so the user gets feedback instead of a caret that
+			// blinks forever.
+			if (!controller.signal.aborted) get().failTurn(toErrorText(error))
 		} finally {
-			// Always re-enable the composer — covers normal completion and errors.
-			set({ status: "idle" })
+			// Only the current turn owns the lifecycle — a superseded/aborted turn must
+			// not stomp a newer turn's status or clear its controller handle.
+			if (activeController === controller) {
+				activeController = null
+				set({ status: "idle" })
+			}
 		}
 	}
 }))

@@ -7,6 +7,7 @@ import { AppError } from "@server/utils/errors"
 import { requireAuth } from "@server/auth-context"
 import { getProjectGraph } from "@server/domain/graph"
 import { getProjectForOrg } from "@server/domain/project"
+import { AGENT_OPERATIONS } from "@server/llm/fallback/chains"
 import {
 	MissingProviderKeyError,
 	getStreamingAgentRuntime,
@@ -106,7 +107,7 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
  */
 function resolveRuntime(): AnthropicAgentRuntime {
 	try {
-		return getStreamingAgentRuntime("qa-agent")
+		return getStreamingAgentRuntime(AGENT_OPERATIONS.qaAgent)
 	} catch (error) {
 		if (error instanceof MissingProviderKeyError) {
 			throw new AppError(

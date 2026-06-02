@@ -46,4 +46,4 @@ export interface ChatMessage {
  * The seam contract ARG-37 implements. Given the user's text, yield events.
  * The mock is the current implementation; the real server loop is a drop-in.
  */
-export type ChatTransport = (userText: string) => AsyncIterable<ChatEvent>
+export type ChatTransport = (userText: string, signal?: AbortSignal) => AsyncIterable<ChatEvent>

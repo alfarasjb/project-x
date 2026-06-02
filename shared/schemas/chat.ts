@@ -55,7 +55,8 @@ export const ChatEventSchema = z.discriminatedUnion("type", [
 		type: z.literal("tool-call-end"),
 		messageId: z.string(),
 		toolCallId: z.string(),
-		status: z.enum(["done", "error"]),
+		// A terminal status — derived from the enum so it can't drift from it.
+		status: ToolCallStatusSchema.exclude(["running"]),
 		resultSummary: z.string().optional(),
 		error: z.string().optional()
 	}),

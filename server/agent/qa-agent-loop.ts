@@ -84,7 +84,8 @@ export async function* runQaAgent(params: QaAgentParams): AsyncGenerator<ChatEve
 			messages,
 			// Drop tools on the final allowed turn so the model answers in prose
 			// instead of requesting a tool whose result we'd have no turn to feed back.
-			...(isLastStep ? {} : { tools: anthropicTools })
+			// undefined omits the field — same as not sending tools at all.
+			tools: isLastStep ? undefined : anthropicTools
 		})
 
 		let finalMessage: Anthropic.Message

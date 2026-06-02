@@ -27,8 +27,15 @@ export type LlmOperation = "analyze-node" | "refine-duplicate-cluster"
  * `getAgentAdapter` (AgentAdapter); `qa-agent` is served by the streaming
  * `getStreamingAgentRuntime` (hand-wired loop in `server/agent/`). Both draw
  * their model + config from the shared registry below.
+ *
+ * Named constants (not a bare union) so call sites reference
+ * `AGENT_OPERATIONS.qaAgent` instead of repeating the `"qa-agent"` string.
  */
-export type AgentOperation = "refine-god-file" | "qa-agent"
+export const AGENT_OPERATIONS = {
+	refineGodFile: "refine-god-file",
+	qaAgent: "qa-agent"
+} as const
+export type AgentOperation = (typeof AGENT_OPERATIONS)[keyof typeof AGENT_OPERATIONS]
 /**
  * Every LLM operation. `FALLBACK_CHAINS` / `TASK_CONFIGS` are keyed by this
  * union so both adapter kinds share the registry, but the factory getters narrow

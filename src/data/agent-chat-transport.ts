@@ -14,12 +14,13 @@ import type { ChatEvent, ChatTransport } from "@/components/graph/agent/types"
  * throws, which the store's `runTurn` catches to re-enable the composer.
  */
 export function createAgentChatTransport(projectId: string): ChatTransport {
-	return async function* (userText) {
+	return async function* (userText, signal) {
 		const res = await fetch(apiRoutes.projectAgent(projectId), {
 			method: "POST",
 			headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
 			credentials: "include",
-			body: JSON.stringify({ message: userText })
+			body: JSON.stringify({ message: userText }),
+			signal
 		})
 		// Errors are returned as JSON before the stream opens (auth / no-graph /
 		// missing key), so a non-OK response still carries the standard `{ error }`.

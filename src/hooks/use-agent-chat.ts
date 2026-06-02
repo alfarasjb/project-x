@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react"
+import { useCallback, useEffect, useMemo } from "react"
 import { createAgentChatTransport } from "@/data/agent-chat-transport"
 import { useAgentChatStore, type ChatStatus } from "@/stores/agent-chat-store"
 import type { ChatMessage } from "@/components/graph/agent/types"
@@ -23,6 +23,11 @@ export function useAgentChat(projectId: string): UseAgentChat {
 	const reset = useAgentChatStore((state) => state.reset)
 
 	const transport = useMemo(() => createAgentChatTransport(projectId), [projectId])
+
+	// The store is module-global but scoped to one project at a time. Reset on
+	// project change / unmount so the prior project's transcript is never shown
+	// here, and any in-flight stream is aborted rather than leaked.
+	useEffect(() => () => reset(), [projectId, reset])
 
 	const sendMessage = useCallback(
 		(text: string) => {
