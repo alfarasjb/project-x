@@ -1,4 +1,5 @@
 import { z } from "zod"
+import type { Graph } from "@shared/schemas/graph"
 
 /**
  * Shared tool core. A `ToolDefinition` is transport-neutral: its `execute`
@@ -13,9 +14,16 @@ import { z } from "zod"
  * without re-implementing (or reaching into) the MCP tool bodies.
  */
 
-/** Context every tool handler receives — today just the bound project. */
+/**
+ * Context every tool handler receives. `graph` is an optional already-loaded
+ * actual graph: an in-process caller (the god-file agent loop) passes the graph
+ * it already holds so the read tools don't re-fetch the JSONB blob on every call
+ * inside a multi-step loop. The MCP path omits it and the tools fall back to a
+ * DB read.
+ */
 export interface ToolContext {
 	projectId: string
+	graph?: Graph
 }
 
 /**

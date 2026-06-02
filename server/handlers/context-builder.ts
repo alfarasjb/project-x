@@ -8,11 +8,12 @@
  * input always renders the same string, which keeps it trivially unit-testable
  * and safe to call from anywhere (handlers, an eval runner, a future canvas).
  *
- * Prompt-cache breakpoints are DESIGNED FOR but not yet WIRED: every block
- * carries a `kind` locality hint (`static`/`cached`/`recent`/`tail`) so the day
- * we thread Anthropic `cache_control` through the adapter we can split the
- * message at the static↔volatile boundary. Today the adapter flattens to text,
- * so `build()` returns a string and `kind` is metadata only.
+ * Prompt-cache breakpoints are DESIGNED FOR but not yet WIRED: a block may carry
+ * a `kind` locality hint (`static`/`cached`/`recent`/`tail`) so the day we thread
+ * Anthropic `cache_control` through the adapter we can split the message at the
+ * static↔volatile boundary. Today the adapter flattens to text, so `build()`
+ * returns a string and `kind` is unread metadata — hence optional, to keep
+ * call sites that don't care about caching quiet.
  */
 
 /** Rough chars-per-token ratio. Good enough for budgeting; we don't ship a tokenizer dep. */
@@ -30,8 +31,8 @@ export type ContextBlockKind = "static" | "cached" | "recent" | "tail"
 export interface ContextBlock {
 	/** XML tag wrapping the block, e.g. "file", "node", "instructions". */
 	tag: string
-	/** Cache-locality hint (forward-looking; no `cache_control` wired yet). */
-	kind: ContextBlockKind
+	/** Cache-locality hint (forward-looking; unread until `cache_control` is wired). */
+	kind?: ContextBlockKind
 	/** Inner text of the block. */
 	content: string
 	/** Optional XML attributes rendered on the open tag; undefined/"" entries are dropped. */

@@ -43,7 +43,7 @@ export type GodFileVerdictOutput = z.infer<typeof GodFileVerdictOutputSchema>
 const SUBMIT_GOD_FILE_VERDICT = {
 	name: "submit_god_file_verdict",
 	description: "Submit your final verdict on whether the flagged file should be split."
-}
+} as const
 
 /** Read-only traversal tools the agent may call. Shared with the MCP server. */
 const GOD_FILE_TOOLS: readonly ToolDefinition[] = [
@@ -63,7 +63,7 @@ const MAX_AGENT_STEPS = 12
  */
 export async function refineGodFile(input: RefineGodFileInput): Promise<GodFileVerdictOutput> {
 	const adapter = getAgentAdapter("refine-god-file")
-	const ctx: ToolContext = { projectId: input.projectId }
+	const ctx: ToolContext = { projectId: input.projectId, graph: input.graph }
 	const toolsByName = new Map(GOD_FILE_TOOLS.map((tool) => [tool.name, tool]))
 
 	const result = await adapter.runAgentLoop({
@@ -145,6 +145,7 @@ export async function refineGodFiles(args: {
 			const output = await refineGodFile({
 				projectId,
 				projectName,
+				graph,
 				path: node.path,
 				lineCount: node.metrics?.lineCount ?? 0,
 				contents,

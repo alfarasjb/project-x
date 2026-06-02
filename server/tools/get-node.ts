@@ -1,6 +1,7 @@
 import { z } from "zod"
 import type { GraphNode } from "@shared/schemas/graph"
-import { getNodeDetail } from "@server/domain/graph"
+import { getProjectGraph, resolveNodeDetail } from "@server/domain/graph"
+import { AppError } from "@server/utils/errors"
 import { defineTool } from "@server/tools/types"
 
 /** A node trimmed to the fields worth showing in an edge reference or child list. */
@@ -37,7 +38,11 @@ Returns JSON: {
 			.describe('The node id (its path), e.g. "server/domain/graph/index.ts".')
 	}),
 	handler: async ({ ctx, input }) => {
-		const detail = await getNodeDetail(ctx.projectId, input.node_id)
+		// Use the caller-provided graph when present (agent loop); else read it once.
+		const graph = ctx.graph ?? (await getProjectGraph(ctx.projectId))?.actual
+		if (!graph) throw new AppError(404, `Project not found: ${ctx.projectId}`)
+		const detail = resolveNodeDetail(graph, input.node_id)
+		if (!detail) throw new AppError(404, `No node "${input.node_id}" in the actual graph.`)
 		return {
 			id: detail.node.id,
 			path: detail.node.path,

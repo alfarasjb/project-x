@@ -20,7 +20,17 @@ export type AnthropicModel = (typeof AI_MODELS)[keyof typeof AI_MODELS]
 
 export type Provider = "anthropic"
 
-export type Operation = "analyze-node" | "refine-duplicate-cluster" | "refine-god-file"
+/** 1-shot operations — served by `getAdapter` (LlmAdapter / FallbackLlmAdapter). */
+export type LlmOperation = "analyze-node" | "refine-duplicate-cluster"
+/** Multi-step agent-loop operations — served by `getAgentAdapter` (AgentAdapter). */
+export type AgentOperation = "refine-god-file"
+/**
+ * Every LLM operation. `FALLBACK_CHAINS` / `TASK_CONFIGS` are keyed by this
+ * union so both adapter kinds share the registry, but the factory getters narrow
+ * to `LlmOperation` / `AgentOperation` so a 1-shot op can't be handed to the
+ * agent factory (or vice-versa) by mistake.
+ */
+export type Operation = LlmOperation | AgentOperation
 
 export interface ChainEntry {
 	provider: Provider

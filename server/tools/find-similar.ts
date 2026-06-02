@@ -32,7 +32,7 @@ Returns JSON: { source: { nodeId, kind, summary }, count, results: [{ nodeId, ki
 			.describe("Restrict to certain node kinds. Defaults to the source node's kind.")
 	}),
 	handler: async ({ ctx, input }) => {
-		const graph = (await getProjectGraph(ctx.projectId))?.actual ?? EMPTY_GRAPH
+		const graph = ctx.graph ?? (await getProjectGraph(ctx.projectId))?.actual ?? EMPTY_GRAPH
 		const nodesById = new Map<string, GraphNode>(graph.nodes.map((node) => [node.id, node]))
 		const source = nodesById.get(input.node_id)
 		const results = await findSimilarNodes({

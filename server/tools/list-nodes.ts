@@ -40,7 +40,7 @@ Returns JSON: { total, count, offset, has_more, nodes: [{ id, path, kind, label,
 		offset: z.number().int().min(0).default(0).describe("Nodes to skip, for pagination.")
 	}),
 	handler: async ({ ctx, input }) => {
-		const graph = (await getProjectGraph(ctx.projectId))?.actual ?? EMPTY_GRAPH
+		const graph = ctx.graph ?? (await getProjectGraph(ctx.projectId))?.actual ?? EMPTY_GRAPH
 		const byKind = input.kind
 			? graph.nodes.filter((node) => node.kind === input.kind)
 			: graph.nodes.filter((node) => node.kind === "module" || node.kind === "file")

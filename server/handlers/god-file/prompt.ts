@@ -13,6 +13,7 @@
  * over up front, with a generous char budget, via ContextBuilder.
  */
 
+import type { Graph } from "@shared/schemas/graph"
 import { ContextBuilder } from "@server/handlers/context-builder"
 
 const GOD_FILE_CONTEXT = {
@@ -51,6 +52,8 @@ export interface RefineGodFileInput {
 	projectId: string
 	/** Bound project name — surfaced in the traversal tools' descriptions. */
 	projectName: string
+	/** Already-loaded actual graph — passed to the tool context so the loop's reads don't re-fetch it. */
+	graph: Graph
 	path: string
 	/** Line count the heuristic flagged on — stated to the model as the (weak) trigger. */
 	lineCount: number

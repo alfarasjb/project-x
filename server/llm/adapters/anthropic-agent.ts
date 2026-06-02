@@ -1,10 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { z } from "zod"
+import { observe } from "@langfuse/tracing"
 import { LlmError, LlmErrorType } from "@server/llm/errors/types"
 import { executeWithRetry } from "@server/llm/utils/retry"
 import { extractUsage, mapAnthropicError } from "@server/llm/adapters/anthropic"
 import type { AnthropicConfig } from "@server/llm/types/adapter-config"
 import type { TaskConfig } from "@server/llm/fallback/chains"
+import type { ObservabilityHook } from "@server/llm/types/observability"
 import type {
 	AgentAdapter,
 	AgentLoopConfig,
@@ -23,21 +25,60 @@ const PROVIDER = "anthropic"
  *
  * Reuses the 1-shot adapter's `mapAnthropicError` + `extractUsage` and the
  * shared `executeWithRetry` so transient-error handling matches the rest of the
- * LLM layer. No observability hook in v1 — the handler-level Langfuse span from
- * the analyze pipeline still captures the run; per-generation spans can follow.
+ * LLM layer.
+ *
+ * Observability: the whole loop is wrapped in ONE Langfuse generation span
+ * (input = initial prompt, output = final verdict, usage = summed across turns).
+ * We deliberately don't emit per-turn spans — the `ObservabilityHook` config
+ * models a single prompt, not an evolving conversation, so aggregate token
+ * attribution is the honest granularity. `observe()` is a passthrough when
+ * Langfuse isn't configured (hook undefined).
  */
 export class AnthropicAgentAdapter implements AgentAdapter {
 	private readonly client: Anthropic
 	private readonly defaultModel: string
 	private readonly defaults: TaskConfig
+	private readonly observability?: ObservabilityHook
+	private readonly label: string
 
-	constructor(config: AnthropicConfig, defaults: TaskConfig) {
+	constructor(config: AnthropicConfig, defaults: TaskConfig, label: string) {
 		this.client = new Anthropic({ apiKey: config.apiKey })
 		this.defaultModel = config.defaultModel
 		this.defaults = defaults
+		this.observability = config.observability
+		this.label = label
 	}
 
 	async runAgentLoop<TSchema extends z.ZodTypeAny>(
+		config: AgentLoopConfig<TSchema>
+	): Promise<GenerationResult<z.infer<TSchema>>> {
+		const traced = observe(
+			async () => {
+				this.observability?.onGenerationStart?.({
+					provider: PROVIDER,
+					model: this.defaultModel,
+					config: {
+						systemPrompt: config.systemPrompt,
+						userPrompt: config.userPrompt,
+						temperature: config.temperature ?? this.defaults.temperature,
+						maxOutputTokens: config.maxOutputTokens ?? this.defaults.maxOutputTokens
+					}
+				})
+				try {
+					const result = await this.runLoop(config)
+					this.observability?.onGenerationComplete?.(result)
+					return result
+				} catch (error) {
+					this.observability?.onGenerationError?.(error)
+					throw error
+				}
+			},
+			{ name: `${this.label} (anthropic/${this.defaultModel})`, asType: "generation" }
+		)
+		return traced()
+	}
+
+	private async runLoop<TSchema extends z.ZodTypeAny>(
 		config: AgentLoopConfig<TSchema>
 	): Promise<GenerationResult<z.infer<TSchema>>> {
 		const model = this.defaultModel
@@ -89,7 +130,7 @@ export class AnthropicAgentAdapter implements AgentAdapter {
 					)
 				}
 				return {
-					content: parsed.data as z.infer<TSchema>,
+					content: parsed.data,
 					usage: { inputTokens, outputTokens },
 					provider: PROVIDER,
 					model
@@ -135,25 +176,26 @@ export class AnthropicAgentAdapter implements AgentAdapter {
 	}
 }
 
+/** Run a turn's tool calls concurrently — they're independent reads. Order is preserved. */
 async function runToolCalls(
 	toolUses: readonly Anthropic.ToolUseBlock[],
 	executeTool: AgentToolExecutor
 ): Promise<Anthropic.ToolResultBlockParam[]> {
-	const results: Anthropic.ToolResultBlockParam[] = []
-	for (const call of toolUses) {
-		try {
-			const result = await executeTool({ name: call.name, input: call.input })
-			results.push({ type: "tool_result", tool_use_id: call.id, content: JSON.stringify(result) })
-		} catch (error) {
-			results.push({
-				type: "tool_result",
-				tool_use_id: call.id,
-				is_error: true,
-				content: error instanceof Error ? error.message : String(error)
-			})
-		}
-	}
-	return results
+	return Promise.all(
+		toolUses.map(async (call): Promise<Anthropic.ToolResultBlockParam> => {
+			try {
+				const result = await executeTool({ name: call.name, input: call.input })
+				return { type: "tool_result", tool_use_id: call.id, content: JSON.stringify(result) }
+			} catch (error) {
+				return {
+					type: "tool_result",
+					tool_use_id: call.id,
+					is_error: true,
+					content: error instanceof Error ? error.message : String(error)
+				}
+			}
+		})
+	)
 }
 
 // Cast: z.toJSONSchema / the upstream tool defs return a JSON Schema object,

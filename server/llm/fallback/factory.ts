@@ -7,10 +7,11 @@ import {
 	EMBEDDING_CHAINS,
 	FALLBACK_CHAINS,
 	TASK_CONFIGS,
+	type AgentOperation,
 	type ChainEntry,
 	type EmbeddingChainEntry,
 	type EmbeddingOperation,
-	type Operation,
+	type LlmOperation,
 	type TaskConfig
 } from "@server/llm/fallback/chains"
 import type { AgentAdapter } from "@server/llm/types/agent-adapter"
@@ -28,14 +29,14 @@ import { langfuseHook } from "@server/observability/langfuse-hook"
  * an operation changes at runtime (it can't today — chains are constants),
  * `clearAdapterCache()` is the explicit reset.
  */
-const adapterCache = new Map<Operation, LlmAdapter>()
+const adapterCache = new Map<LlmOperation, LlmAdapter>()
 const providerCache = new Map<string, LlmAdapter>()
-const agentAdapterCache = new Map<Operation, AgentAdapter>()
+const agentAdapterCache = new Map<AgentOperation, AgentAdapter>()
 const embeddingAdapterCache = new Map<EmbeddingOperation, EmbeddingAdapter>()
 const embeddingProviderCache = new Map<string, EmbeddingAdapter>()
 
-/** Get (or build) the adapter for an operation, wiring the configured chain. */
-export function getAdapter(operation: Operation): LlmAdapter {
+/** Get (or build) the 1-shot adapter for an operation, wiring the configured chain. */
+export function getAdapter(operation: LlmOperation): LlmAdapter {
 	const cached = adapterCache.get(operation)
 	if (cached) return cached
 
@@ -84,7 +85,7 @@ function buildProviderAdapter(entry: ChainEntry): LlmAdapter {
  * second provider arrives, not before. Shares the per-operation cache pattern
  * with `getAdapter` but a separate cache because the returned type differs.
  */
-export function getAgentAdapter(operation: Operation): AgentAdapter {
+export function getAgentAdapter(operation: AgentOperation): AgentAdapter {
 	const cached = agentAdapterCache.get(operation)
 	if (cached) return cached
 	const entry = FALLBACK_CHAINS[operation][0]
@@ -95,20 +96,32 @@ export function getAgentAdapter(operation: Operation): AgentAdapter {
 	// adapter as its per-call defaults — the same config the 1-shot path applies
 	// via FallbackLlmAdapter. Cached per operation, since two operations can
 	// share a model but want different knobs.
-	const adapter = buildAgentProviderAdapter(entry, TASK_CONFIGS[operation])
+	const adapter = buildAgentProviderAdapter(entry, operation, TASK_CONFIGS[operation])
 	agentAdapterCache.set(operation, adapter)
 	return adapter
 }
 
-function buildAgentProviderAdapter(entry: ChainEntry, defaults: TaskConfig): AgentAdapter {
+function buildAgentProviderAdapter(
+	entry: ChainEntry,
+	operation: AgentOperation,
+	defaults: TaskConfig
+): AgentAdapter {
 	switch (entry.provider) {
 		case "anthropic": {
 			if (!env.ANTHROPIC_API_KEY) {
 				throw new MissingProviderKeyError("anthropic", "ANTHROPIC_API_KEY")
 			}
+			// Same observability gating as the 1-shot path: the hook enriches a
+			// Langfuse generation span the adapter opens per loop. Undefined when
+			// keys are unset, so `observe()` is a passthrough.
 			return new AnthropicAgentAdapter(
-				{ apiKey: env.ANTHROPIC_API_KEY, defaultModel: entry.model },
-				defaults
+				{
+					apiKey: env.ANTHROPIC_API_KEY,
+					defaultModel: entry.model,
+					observability: getObservabilityHook()
+				},
+				defaults,
+				operation
 			)
 		}
 		default: {

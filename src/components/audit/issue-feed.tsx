@@ -179,7 +179,8 @@ function IssueRow({
 					"flex w-full items-start gap-3 border-l-2 py-2.5 pr-3 pl-3 text-left transition-colors",
 					SEVERITY_BORDER[issue.severity],
 					selected ? "bg-muted/60" : "hover:bg-muted/30",
-					// A vetoed duplicate stays in the feed (the receipt) but dimmed.
+					// A false-positive verdict (dismissed duplicate OR "not a god file")
+					// stays in the feed as the receipt, but dimmed.
 					issue.refinement?.verdict === "false-positive" && "opacity-55"
 				)}
 			>
