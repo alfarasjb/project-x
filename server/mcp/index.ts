@@ -9,13 +9,16 @@ import {
 } from "@shared/schemas/graph"
 import { IssueSeveritySchema, type Issue } from "@shared/schemas/issue"
 import {
-	getNodeDetail,
 	getProjectGraph,
 	getProjectIssues,
 	setNodeClassification,
 	setNodeDescription
 } from "@server/domain/graph"
-import { findSimilarNodes, findSimilarToText } from "@server/domain/embeddings/similarity"
+import { findSimilarToText } from "@server/domain/embeddings/similarity"
+import { getNodeTool } from "@server/tools/get-node"
+import { listNodesTool } from "@server/tools/list-nodes"
+import { findSimilarToNodeTool } from "@server/tools/find-similar"
+import type { ToolDefinition } from "@server/tools/types"
 import { resolveBoundProject } from "@server/mcp/project"
 
 /**
@@ -41,9 +44,41 @@ function toolError(error: unknown): { isError: true; content: { type: "text"; te
 	}
 }
 
-/** A node trimmed to the fields worth showing in a list or an edge reference. */
-function briefNode(node: GraphNode): { id: string; kind: string; label: string } {
-	return { id: node.id, kind: node.kind, label: node.label }
+/**
+ * Register a shared `server/tools/` definition on the MCP server: bind the
+ * project, run the def's `execute`, and adapt the typed result into an MCP
+ * `content` envelope. These shared defs are read-only traversal tools (so the
+ * annotations are fixed) and are also consumed directly — no MCP transport — by
+ * the in-process god-file agent loop. This wrapper is just the MCP adapter.
+ */
+function registerSharedReadTool(
+	server: McpServer,
+	project: { id: string; name: string },
+	title: string,
+	def: ToolDefinition
+): void {
+	server.registerTool(
+		def.name,
+		{
+			title,
+			description: def.describe(project.name),
+			inputSchema: def.rawShape,
+			annotations: {
+				readOnlyHint: true,
+				destructiveHint: false,
+				idempotentHint: true,
+				openWorldHint: false
+			}
+		},
+		async (input) => {
+			try {
+				const result = await def.execute({ projectId: project.id }, input)
+				return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
+			} catch (error) {
+				return toolError(error)
+			}
+		}
+	)
 }
 
 /** Sort comparator: critical → warning → info. Mirrors the dashboard Issue Feed. */
@@ -85,140 +120,16 @@ async function main(): Promise<void> {
 		}
 	)
 
-	// --- Tool: list nodes ----------------------------------------------------
-	server.registerTool(
-		"projectx_list_nodes",
-		{
-			title: "List graph nodes",
-			description: `List nodes in the architecture graph for "${project.name}" — modules (folders) and files — each with its current description and classification.
-
-Use this to take inventory of the codebase, to find which nodes still need a description (filter described=false), or which still need a classification (filter classified=false). To inspect one node's connections, use projectx_get_node. To read the entire graph at once, use the projectx://graph resource.
-
-Args:
-  - kind (string, optional): restrict to one kind, e.g. "module" or "file". Omit for both modules and files (symbol-level nodes are excluded).
-  - described (boolean, optional): true → only nodes with a description; false → only nodes without one; omit → all.
-  - classified (boolean, optional): true → only nodes with a classification; false → only nodes without one; omit → all.
-  - limit (number): max nodes to return, 1-500 (default 200).
-  - offset (number): nodes to skip, for pagination (default 0).
-
-Returns JSON: { total, count, offset, has_more, nodes: [{ id, path, kind, label, described, description, classified, classification }] }. A node's "id" is its path — pass it as node_id to projectx_get_node, projectx_set_description, or projectx_classify_node.`,
-			inputSchema: {
-				kind: z
-					.string()
-					.min(1)
-					.optional()
-					.describe('Restrict to one kind, e.g. "module" or "file". Omit for modules + files.'),
-				described: z
-					.boolean()
-					.optional()
-					.describe("Filter by whether the node has a description. Omit for all nodes."),
-				classified: z
-					.boolean()
-					.optional()
-					.describe("Filter by whether the node has a classification. Omit for all nodes."),
-				limit: z.number().int().min(1).max(500).default(200).describe("Max nodes to return."),
-				offset: z.number().int().min(0).default(0).describe("Nodes to skip, for pagination.")
-			},
-			annotations: {
-				readOnlyHint: true,
-				destructiveHint: false,
-				idempotentHint: true,
-				openWorldHint: false
-			}
-		},
-		async ({ kind, described, classified, limit, offset }) => {
-			try {
-				const graph = await getProjectGraph(project.id)
-				const all = graph?.actual.nodes ?? []
-				const byKind = kind
-					? all.filter((node) => node.kind === kind)
-					: all.filter((node) => node.kind === "module" || node.kind === "file")
-				const byDescribed =
-					described === undefined
-						? byKind
-						: byKind.filter((node) => (node.description !== undefined) === described)
-				const filtered =
-					classified === undefined
-						? byDescribed
-						: byDescribed.filter((node) => (node.classification !== undefined) === classified)
-				const page = filtered.slice(offset, offset + limit)
-				const result = {
-					total: filtered.length,
-					count: page.length,
-					offset,
-					has_more: offset + page.length < filtered.length,
-					nodes: page.map((node) => ({
-						id: node.id,
-						path: node.path,
-						kind: node.kind,
-						label: node.label,
-						described: node.description !== undefined,
-						description: node.description ?? null,
-						classified: node.classification !== undefined,
-						classification: node.classification ?? null
-					}))
-				}
-				return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
-			} catch (error) {
-				return toolError(error)
-			}
-		}
-	)
-
-	// --- Tool: get node ------------------------------------------------------
-	server.registerTool(
-		"projectx_get_node",
-		{
-			title: "Get node detail",
-			description: `Get full detail for one node in the architecture graph for "${project.name}": its kind, path, layer, signature, description, containment children, and the edges in and out of it.
-
-Use this to inspect a specific node and to TRACE A FLOW — get a node, follow one of its "dependencies" to the next node, call projectx_get_node again, and repeat. Use projectx_list_nodes to discover node ids; read the projectx://graph resource when you want the whole graph at once.
-
-Args:
-  - node_id (string): the node's id, which is its path (e.g. "server/domain/graph/index.ts" for a file, or "server/domain/graph" for a module).
-
-Returns JSON: {
-  id, path, kind, label, layer, classification, signature, description,
-  parent: { id, label } | null,
-  children: [{ id, kind, label }],       // nodes contained inside this one
-  dependencies: [{ id, kind, label }],   // nodes this node imports / depends on
-  dependents: [{ id, kind, label }]      // nodes that import / depend on this one
-}. Errors if the node is unknown.`,
-			inputSchema: {
-				node_id: z
-					.string()
-					.min(1)
-					.describe('The node id (its path), e.g. "server/domain/graph/index.ts".')
-			},
-			annotations: {
-				readOnlyHint: true,
-				destructiveHint: false,
-				idempotentHint: true,
-				openWorldHint: false
-			}
-		},
-		async ({ node_id }) => {
-			try {
-				const detail = await getNodeDetail(project.id, node_id)
-				const result = {
-					id: detail.node.id,
-					path: detail.node.path,
-					kind: detail.node.kind,
-					label: detail.node.label,
-					layer: detail.node.layer ?? null,
-					classification: detail.node.classification ?? null,
-					signature: detail.node.signature ?? null,
-					description: detail.node.description ?? null,
-					parent: detail.parent ? { id: detail.parent.id, label: detail.parent.label } : null,
-					children: detail.children.map(briefNode),
-					dependencies: detail.dependencies.map(briefNode),
-					dependents: detail.dependents.map(briefNode)
-				}
-				return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] }
-			} catch (error) {
-				return toolError(error)
-			}
-		}
+	// --- Read-only traversal tools (shared with the god-file agent loop) -----
+	// These are wrappers over `server/tools/` defs — the same defs the in-process
+	// agent loop consumes directly. Keep their bodies in `server/tools/`, not here.
+	registerSharedReadTool(server, project, "List graph nodes", listNodesTool)
+	registerSharedReadTool(server, project, "Get node detail", getNodeTool)
+	registerSharedReadTool(
+		server,
+		project,
+		"Find nodes similar to one specific node",
+		findSimilarToNodeTool
 	)
 
 	// --- Tool: set description -----------------------------------------------
@@ -540,91 +451,6 @@ Returns JSON: { query, count, results: [{ nodeId, kind, distance, classification
 						{
 							type: "text",
 							text: JSON.stringify({ query, count: enriched.length, results: enriched }, null, 2)
-						}
-					]
-				}
-			} catch (error) {
-				return toolError(error)
-			}
-		}
-	)
-
-	// --- Tool: peer similarity by source node ------------------------------
-	server.registerTool(
-		"projectx_find_similar_to_node",
-		{
-			title: "Find nodes similar to one specific node",
-			description: `Find the top-K nodes most similar to a given source node in "${project.name}", excluding the source itself. Same vector backend as projectx_search_similar_nodes.
-
-Use this when you've ALREADY found one relevant node (via projectx_list_nodes, projectx_get_node, or projectx_search_similar_nodes) and want to discover its NEIGHBOURS — files that do similar work, that probably want to be touched together, or that may be duplicates you can consolidate. Defaults to peer-level matches (a file matches files, a module matches modules); pass kinds to widen.
-
-Args:
-  - node_id (string): id of the source node (its path), e.g. "src/lib/storage.ts".
-  - k (number, optional): how many results to return. Default 5, max 25.
-  - kinds (array of "file" | "module", optional): restrict to certain node kinds. Defaults to the source node's own kind.
-
-Returns JSON: { source: { nodeId, kind, summary }, count, results: [{ nodeId, kind, distance, classification, summary }] }. Empty results = the source node has no embedding yet (it must be Analyzed first) OR no other nodes are embedded.`,
-			inputSchema: {
-				node_id: z.string().min(1).describe("Id of the source node (its path)."),
-				k: z
-					.number()
-					.int()
-					.min(1)
-					.max(25)
-					.optional()
-					.describe("Top K results to return. Default 5."),
-				kinds: z
-					.array(z.enum(["file", "module"]))
-					.optional()
-					.describe("Restrict to certain node kinds. Defaults to the source node's kind.")
-			},
-			annotations: {
-				readOnlyHint: true,
-				destructiveHint: false,
-				idempotentHint: true,
-				openWorldHint: false
-			}
-		},
-		async ({ node_id, k, kinds }) => {
-			try {
-				const graph = (await getProjectGraph(project.id))?.actual ?? EMPTY_GRAPH
-				const nodesById = new Map<string, GraphNode>(graph.nodes.map((n) => [n.id, n]))
-				const source = nodesById.get(node_id)
-				const results = await findSimilarNodes({
-					projectId: project.id,
-					nodeId: node_id,
-					k: k ?? 5,
-					...(kinds ? { kinds } : {})
-				})
-				const enriched = results.map((r) => {
-					const node = nodesById.get(r.nodeId)
-					return {
-						nodeId: r.nodeId,
-						kind: r.kind,
-						distance: Number(r.distance.toFixed(4)),
-						classification: node?.classification ?? null,
-						summary: node?.description?.what ?? null
-					}
-				})
-				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify(
-								{
-									source: source
-										? {
-												nodeId: source.id,
-												kind: source.kind,
-												summary: source.description?.what ?? null
-											}
-										: { nodeId: node_id, kind: null, summary: null },
-									count: enriched.length,
-									results: enriched
-								},
-								null,
-								2
-							)
 						}
 					]
 				}

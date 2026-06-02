@@ -20,7 +20,17 @@ export type AnthropicModel = (typeof AI_MODELS)[keyof typeof AI_MODELS]
 
 export type Provider = "anthropic"
 
-export type Operation = "analyze-node" | "refine-duplicate-cluster"
+/** 1-shot operations — served by `getAdapter` (LlmAdapter / FallbackLlmAdapter). */
+export type LlmOperation = "analyze-node" | "refine-duplicate-cluster"
+/** Multi-step agent-loop operations — served by `getAgentAdapter` (AgentAdapter). */
+export type AgentOperation = "refine-god-file"
+/**
+ * Every LLM operation. `FALLBACK_CHAINS` / `TASK_CONFIGS` are keyed by this
+ * union so both adapter kinds share the registry, but the factory getters narrow
+ * to `LlmOperation` / `AgentOperation` so a 1-shot op can't be handed to the
+ * agent factory (or vice-versa) by mistake.
+ */
+export type Operation = LlmOperation | AgentOperation
 
 export interface ChainEntry {
 	provider: Provider
@@ -36,7 +46,11 @@ export const FALLBACK_CHAINS: Record<Operation, readonly ChainEntry[]> = {
 	// splitting out proximity-only members) is a reasoning task where Haiku
 	// over-confidently merges. This runs on a handful of clusters per analyze,
 	// not every node, so the cost delta is small.
-	"refine-duplicate-cluster": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }]
+	"refine-duplicate-cluster": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }],
+	// Sonnet: a multi-step agent loop that traverses the graph to justify or
+	// refute a god-file flag. Same reasoning-over-cost call as duplicate refine,
+	// and it runs on at most a handful of god files per analyze.
+	"refine-god-file": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }]
 }
 
 export interface TaskConfig {
@@ -52,7 +66,11 @@ export const TASK_CONFIGS: Record<Operation, TaskConfig> = {
 	// Slightly higher temp than analyze (still low) and a bigger budget: the
 	// payload is verdict + 2-4 sentence reasoning + a consolidation paragraph +
 	// an optional excluded list.
-	"refine-duplicate-cluster": { temperature: 0.3, maxOutputTokens: 1200 }
+	"refine-duplicate-cluster": { temperature: 0.3, maxOutputTokens: 1200 },
+	// Per-turn budget for the agent loop: each turn is either a tool call or the
+	// final verdict (verdict + reasoning + a split-plan paragraph). The loop's
+	// step cap lives with the handler, not here — this config is per-call.
+	"refine-god-file": { temperature: 0.3, maxOutputTokens: 1500 }
 }
 
 /**

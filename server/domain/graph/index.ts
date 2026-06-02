@@ -15,6 +15,7 @@ import { parseProject } from "@server/parser"
 import { analyzeGraph } from "@server/audit/analyze"
 import { runAudit, runSimilarityAudit, mergeIssueHistory } from "@server/audit/run"
 import { refineDuplicateClusters } from "@server/handlers/duplicate-refinement/handler"
+import { refineGodFiles } from "@server/handlers/god-file/handler"
 import { embedNodes } from "@server/domain/embeddings"
 import { AppError } from "@server/utils/errors"
 
@@ -225,7 +226,23 @@ export async function analyzeProjectFromPath(
 					return issues
 				}
 			)
-			await saveProjectIssues(project.id, refinedIssues)
+			// Second handler: the god-file agent loop. Same non-fatal contract — a
+			// failure leaves the duplicate-refined issues untouched. Runs after the
+			// duplicate pass so both verdicts land in one save.
+			const fullyRefined = await refineGodFiles({
+				issues: refinedIssues,
+				graph: result.graph,
+				sourcePath,
+				projectId: project.id,
+				projectName: project.name
+			}).catch((error: unknown) => {
+				const message = error instanceof Error ? error.message : String(error)
+				console.warn(
+					`[analyze] ${project.slug}: god-file refinement failed (continuing): ${message}`
+				)
+				return refinedIssues
+			})
+			await saveProjectIssues(project.id, fullyRefined)
 			console.warn(
 				`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}, embedded ${embedResult.embedded} (embed skipped ${embedResult.skipped}, failed ${embedResult.failed}), duplicate-candidates ${similarityIssues.length}${options?.force ? " (forced)" : ""}`
 			)
@@ -317,20 +334,17 @@ export interface NodeDetail {
 }
 
 /**
- * Resolve one node's detail in the stored actual graph: the node itself plus
- * its containment parent/children and its edge neighbours. This is the unit an
- * agent walks to trace a flow — follow `dependencies` to the next node, repeat.
- *
- * Throws if the project or node is unknown.
+ * Resolve one node's detail from an in-memory graph: the node itself plus its
+ * containment parent/children and its edge neighbours. Pure — no DB read — so a
+ * caller that already holds the graph (e.g. the god-file agent loop, mid-analyze)
+ * can resolve without re-fetching the JSONB blob per call. Returns null if the
+ * node isn't in the graph.
  */
-export async function getNodeDetail(projectId: string, nodeId: string): Promise<NodeDetail> {
-	const graph = await getProjectGraph(projectId)
-	if (!graph) throw new AppError(404, `Project not found: ${projectId}`)
-
-	const { nodes, edges } = graph.actual
+export function resolveNodeDetail(graph: Graph, nodeId: string): NodeDetail | null {
+	const { nodes, edges } = graph
 	const byId = new Map(nodes.map((node) => [node.id, node]))
 	const node = byId.get(nodeId)
-	if (!node) throw new AppError(404, `No node "${nodeId}" in the actual graph.`)
+	if (!node) return null
 
 	const resolve = (id: string | undefined): GraphNode | undefined =>
 		id === undefined ? undefined : byId.get(id)
@@ -350,4 +364,17 @@ export async function getNodeDetail(projectId: string, nodeId: string): Promise<
 			.map((edge) => resolve(edge.source))
 			.filter(present)
 	}
+}
+
+/**
+ * Resolve one node's detail in the stored actual graph. Reads the graph from the
+ * DB, then delegates to `resolveNodeDetail`. Throws if the project or node is
+ * unknown.
+ */
+export async function getNodeDetail(projectId: string, nodeId: string): Promise<NodeDetail> {
+	const graph = await getProjectGraph(projectId)
+	if (!graph) throw new AppError(404, `Project not found: ${projectId}`)
+	const detail = resolveNodeDetail(graph.actual, nodeId)
+	if (!detail) throw new AppError(404, `No node "${nodeId}" in the actual graph.`)
+	return detail
 }

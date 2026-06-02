@@ -1,7 +1,13 @@
 import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Search } from "lucide-react"
-import type { Issue, IssueSeverity, RefinementVerdict } from "@shared/schemas/issue"
+import type {
+	GodFileVerdict,
+	Issue,
+	IssueRefinement,
+	IssueSeverity,
+	RefinementVerdict
+} from "@shared/schemas/issue"
 import { issuesQueryOptions } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
@@ -173,7 +179,8 @@ function IssueRow({
 					"flex w-full items-start gap-3 border-l-2 py-2.5 pr-3 pl-3 text-left transition-colors",
 					SEVERITY_BORDER[issue.severity],
 					selected ? "bg-muted/60" : "hover:bg-muted/30",
-					// A vetoed duplicate stays in the feed (the receipt) but dimmed.
+					// A false-positive verdict (dismissed duplicate OR "not a god file")
+					// stays in the feed as the receipt, but dimmed.
 					issue.refinement?.verdict === "false-positive" && "opacity-55"
 				)}
 			>
@@ -200,7 +207,7 @@ function IssueRow({
 						)}
 						{issue.refinement && (
 							<span className={cn("font-medium", VERDICT_TEXT[issue.refinement.verdict])}>
-								{VERDICT_SHORT[issue.refinement.verdict]}
+								{verdictShort(issue.refinement)}
 							</span>
 						)}
 						<span>{formatDetected(issue.firstDetected)}</span>
@@ -336,7 +343,16 @@ function matchesSearch(issue: Issue, query: string): boolean {
 	if (issue.concerns?.some((concern) => concern.message.toLowerCase().includes(query))) return true
 	if (issue.description.toLowerCase().includes(query)) return true
 	if (issue.refinement?.reasoning.toLowerCase().includes(query)) return true
-	if (issue.refinement?.consolidation?.toLowerCase().includes(query)) return true
+	if (
+		issue.refinement?.kind === "duplicate" &&
+		issue.refinement.consolidation?.toLowerCase().includes(query)
+	)
+		return true
+	if (
+		issue.refinement?.kind === "god-file" &&
+		issue.refinement.splitPlan?.toLowerCase().includes(query)
+	)
+		return true
 	return false
 }
 
@@ -394,15 +410,32 @@ const SEVERITY_BORDER: Record<IssueSeverity, string> = {
 	info: "border-l-border"
 }
 
-/** Compact verdict label + colour for a refined duplicate row. */
-const VERDICT_SHORT: Record<RefinementVerdict, string> = {
+/**
+ * Compact verdict label for a refined row. Keyed by kind THEN verdict because
+ * "partial"/"false-positive" exist in both vocabularies but read differently.
+ */
+const DUPLICATE_VERDICT_SHORT: Record<RefinementVerdict, string> = {
 	duplicate: "verified duplicate",
 	partial: "partial overlap",
 	"false-positive": "vetoed"
 }
 
-const VERDICT_TEXT: Record<RefinementVerdict, string> = {
+const GOD_FILE_VERDICT_SHORT: Record<GodFileVerdict, string> = {
+	"should-split": "should split",
+	partial: "extract a chunk",
+	"false-positive": "not a god file"
+}
+
+function verdictShort(refinement: IssueRefinement): string {
+	return refinement.kind === "duplicate"
+		? DUPLICATE_VERDICT_SHORT[refinement.verdict]
+		: GOD_FILE_VERDICT_SHORT[refinement.verdict]
+}
+
+/** Colour is keyed by verdict alone — the palette maps cleanly across both kinds. */
+const VERDICT_TEXT: Record<RefinementVerdict | GodFileVerdict, string> = {
 	duplicate: "text-amber-600 dark:text-amber-400",
+	"should-split": "text-amber-600 dark:text-amber-400",
 	partial: "text-blue-600 dark:text-blue-400",
 	"false-positive": "text-muted-foreground"
 }
