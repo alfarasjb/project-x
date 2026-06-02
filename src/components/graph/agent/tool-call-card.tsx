@@ -19,6 +19,8 @@ function StatusIcon({ status }: { status: ToolCallStatus }) {
  * status, expandable to its result (or error) once the call resolves.
  */
 export function ToolCallCard({ toolCall }: { toolCall: ToolCall }) {
+	// Default open so a resolved call shows its result without a click; inert
+	// (the toggle is disabled) until `hasDetail` is true.
 	const [open, setOpen] = useState(true)
 	const hasDetail = toolCall.resultSummary !== undefined || toolCall.error !== undefined
 

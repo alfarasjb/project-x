@@ -3,6 +3,7 @@ import type { ChatMessage } from "./types"
 import type { ChatStatus } from "@/stores/agent-chat-store"
 import { MessageBubble } from "./message-bubble"
 import { ThinkingIndicator } from "./thinking-indicator"
+import { COMPOSER_PLACEHOLDER } from "./constants"
 
 /**
  * Scrolling message stream, newest at the bottom. Auto-scrolls to the bottom as
@@ -18,7 +19,7 @@ export function MessageList({ messages, status }: { messages: ChatMessage[]; sta
 	if (messages.length === 0) {
 		return (
 			<div className="text-muted-foreground flex flex-1 items-center justify-center p-6 text-center text-sm">
-				Ask about this graph…
+				{COMPOSER_PLACEHOLDER}
 			</div>
 		)
 	}

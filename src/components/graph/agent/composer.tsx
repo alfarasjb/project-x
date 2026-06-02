@@ -2,6 +2,7 @@ import { useState, type KeyboardEvent } from "react"
 import { SendHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { ChatStatus } from "@/stores/agent-chat-store"
+import { COMPOSER_PLACEHOLDER } from "./constants"
 
 /**
  * Message input. Enter sends, Shift+Enter inserts a newline. Disabled while a
@@ -39,7 +40,8 @@ export function Composer({
 				onChange={(event) => setValue(event.target.value)}
 				onKeyDown={onKeyDown}
 				rows={1}
-				placeholder="Ask about this graph…"
+				aria-label="Message"
+				placeholder={COMPOSER_PLACEHOLDER}
 				className="bg-background placeholder:text-muted-foreground focus-visible:ring-ring max-h-32 min-h-9 flex-1 resize-none rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
 			/>
 			<Button

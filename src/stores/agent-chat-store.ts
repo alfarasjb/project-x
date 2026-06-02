@@ -117,12 +117,16 @@ export const useAgentChatStore = create<AgentChatState>((set, get) => ({
 		get().appendUserMessage(userText)
 		set({ status: "thinking" })
 
-		for await (const event of transport(userText)) {
-			// First content lands → leave the thinking shimmer, start streaming.
-			if (get().status === "thinking") set({ status: "streaming" })
-			get().applyEvent(event)
+		try {
+			for await (const event of transport(userText)) {
+				// First content lands → leave the thinking shimmer, start streaming.
+				if (get().status === "thinking") set({ status: "streaming" })
+				get().applyEvent(event)
+			}
+		} finally {
+			// Always re-enable the composer — covers normal completion and a
+			// transport that throws mid-stream (a buggy mock, or the future loop).
+			set({ status: "idle" })
 		}
-
-		set({ status: "idle" })
 	}
 }))

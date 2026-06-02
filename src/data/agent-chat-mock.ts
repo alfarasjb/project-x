@@ -17,9 +17,12 @@ const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 /** Split into word-plus-trailing-space chunks so text streams a token at a time. */
 const chunks = (text: string): string[] => text.match(/\S+\s*/g) ?? []
 
-const TEXT_DELTA_MS = 45
-const THINKING_MS = 550
-const TOOL_RUN_MS = 650
+/** Awaited pauses (ms) that pace the scripted demo turn. */
+const MOCK_DELAYS = {
+	textDelta: 45,
+	thinking: 550,
+	toolRun: 650
+} as const
 
 export const mockChatTransport: ChatTransport = async function* (userText) {
 	const messageId = crypto.randomUUID()
@@ -30,11 +33,11 @@ export const mockChatTransport: ChatTransport = async function* (userText) {
 		" Found 8 service-layer nodes; the harness fans out to four of them. Ask about any one to drill in."
 
 	// Thinking beat — the composer shows a shimmer until the first content lands.
-	await delay(THINKING_MS)
+	await delay(MOCK_DELAYS.thinking)
 	yield { type: "message-start", messageId, role: "assistant" }
 
 	for (const chunk of chunks(opening)) {
-		await delay(TEXT_DELTA_MS)
+		await delay(MOCK_DELAYS.textDelta)
 		yield { type: "text-delta", messageId, delta: chunk }
 	}
 
@@ -43,7 +46,7 @@ export const mockChatTransport: ChatTransport = async function* (userText) {
 		messageId,
 		toolCall: { id: toolCallId, name: "list_nodes", argsSummary: "layer: service" }
 	}
-	await delay(TOOL_RUN_MS)
+	await delay(MOCK_DELAYS.toolRun)
 	yield {
 		type: "tool-call-end",
 		messageId,
@@ -53,7 +56,7 @@ export const mockChatTransport: ChatTransport = async function* (userText) {
 	}
 
 	for (const chunk of chunks(followUp)) {
-		await delay(TEXT_DELTA_MS)
+		await delay(MOCK_DELAYS.textDelta)
 		yield { type: "text-delta", messageId, delta: chunk }
 	}
 

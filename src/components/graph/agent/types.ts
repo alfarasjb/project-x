@@ -62,7 +62,7 @@ export type ChatEvent =
 			type: "tool-call-end"
 			messageId: string
 			toolCallId: string
-			status: "done" | "error"
+			status: Exclude<ToolCallStatus, "running">
 			resultSummary?: string
 			error?: string
 	  }

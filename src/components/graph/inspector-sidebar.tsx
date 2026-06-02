@@ -69,7 +69,11 @@ export function InspectorSidebar({
 					</button>
 				</div>
 
-				<TabsContent value="inspector" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+				<TabsContent
+					value="inspector"
+					forceMount
+					className="flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
+				>
 					{selectedNode ? (
 						<>
 							<div className="max-h-[45%] shrink-0 overflow-y-auto border-b p-3">
@@ -92,7 +96,11 @@ export function InspectorSidebar({
 					)}
 				</TabsContent>
 
-				<TabsContent value="agent" className="min-h-0 flex-1 overflow-hidden">
+				<TabsContent
+					value="agent"
+					forceMount
+					className="min-h-0 flex-1 overflow-hidden data-[state=inactive]:hidden"
+				>
 					<AgentChat />
 				</TabsContent>
 			</Tabs>
