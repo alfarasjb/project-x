@@ -144,3 +144,30 @@
 		animation: none;
 	}
 }
+
+/*
+ * QA Agent chat — the caret blinks at the end of an in-flight assistant message
+ * and disappears when the turn completes. Respects prefers-reduced-motion: the
+ * bar stays solid.
+ */
+@keyframes agent-caret-blink {
+	50% {
+		opacity: 0;
+	}
+}
+
+.agent-caret {
+	display: inline-block;
+	width: 2px;
+	height: 1em;
+	margin-left: 1px;
+	vertical-align: text-bottom;
+	background-color: var(--color-foreground);
+	animation: agent-caret-blink 1s step-end infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.agent-caret {
+		animation: none;
+	}
+}
