@@ -1,4 +1,5 @@
 import { AnthropicAdapter } from "@server/llm/adapters/anthropic"
+import { AnthropicAgentAdapter } from "@server/llm/adapters/anthropic-agent"
 import { VoyageAdapter } from "@server/llm/adapters/voyage"
 import { env } from "@server/env"
 import { FallbackLlmAdapter } from "@server/llm/fallback/adapter"
@@ -9,8 +10,10 @@ import {
 	type ChainEntry,
 	type EmbeddingChainEntry,
 	type EmbeddingOperation,
-	type Operation
+	type Operation,
+	type TaskConfig
 } from "@server/llm/fallback/chains"
+import type { AgentAdapter } from "@server/llm/types/agent-adapter"
 import type { EmbeddingAdapter, LlmAdapter } from "@server/llm/types/adapter"
 import type { ObservabilityHook } from "@server/llm/types/observability"
 import { langfuseHook } from "@server/observability/langfuse-hook"
@@ -27,6 +30,7 @@ import { langfuseHook } from "@server/observability/langfuse-hook"
  */
 const adapterCache = new Map<Operation, LlmAdapter>()
 const providerCache = new Map<string, LlmAdapter>()
+const agentAdapterCache = new Map<Operation, AgentAdapter>()
 const embeddingAdapterCache = new Map<EmbeddingOperation, EmbeddingAdapter>()
 const embeddingProviderCache = new Map<string, EmbeddingAdapter>()
 
@@ -67,6 +71,47 @@ function buildProviderAdapter(entry: ChainEntry): LlmAdapter {
 		default: {
 			// Exhaustive: `Provider` is `"anthropic"` today. The `never` makes adding
 			// a new provider a compile error here until the case is handled.
+			const exhaustive: never = entry.provider
+			throw new Error(`Unhandled provider: ${exhaustive as string}`)
+		}
+	}
+}
+
+/**
+ * Get (or build) the multi-step agent adapter for an operation. No fallback
+ * wrapping in v1: agent chains are length-1 (Anthropic-only), so we return the
+ * underlying adapter directly. A `FallbackAgentAdapter` is the right move when a
+ * second provider arrives, not before. Shares the per-operation cache pattern
+ * with `getAdapter` but a separate cache because the returned type differs.
+ */
+export function getAgentAdapter(operation: Operation): AgentAdapter {
+	const cached = agentAdapterCache.get(operation)
+	if (cached) return cached
+	const entry = FALLBACK_CHAINS[operation][0]
+	if (!entry) {
+		throw new Error(`No chain configured for agent operation "${operation}"`)
+	}
+	// Bake the per-operation TaskConfig (temperature + token budget) into the
+	// adapter as its per-call defaults — the same config the 1-shot path applies
+	// via FallbackLlmAdapter. Cached per operation, since two operations can
+	// share a model but want different knobs.
+	const adapter = buildAgentProviderAdapter(entry, TASK_CONFIGS[operation])
+	agentAdapterCache.set(operation, adapter)
+	return adapter
+}
+
+function buildAgentProviderAdapter(entry: ChainEntry, defaults: TaskConfig): AgentAdapter {
+	switch (entry.provider) {
+		case "anthropic": {
+			if (!env.ANTHROPIC_API_KEY) {
+				throw new MissingProviderKeyError("anthropic", "ANTHROPIC_API_KEY")
+			}
+			return new AnthropicAgentAdapter(
+				{ apiKey: env.ANTHROPIC_API_KEY, defaultModel: entry.model },
+				defaults
+			)
+		}
+		default: {
 			const exhaustive: never = entry.provider
 			throw new Error(`Unhandled provider: ${exhaustive as string}`)
 		}
@@ -154,6 +199,7 @@ export class MissingProviderKeyError extends Error {
 export function clearAdapterCache(): void {
 	adapterCache.clear()
 	providerCache.clear()
+	agentAdapterCache.clear()
 	embeddingAdapterCache.clear()
 	embeddingProviderCache.clear()
 }

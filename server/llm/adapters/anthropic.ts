@@ -136,7 +136,7 @@ export class AnthropicAdapter extends BaseLlmAdapter {
 }
 
 /** Surface Anthropic's per-call token counts in our provider-neutral shape. */
-function extractUsage(usage: Anthropic.Usage): TokenUsage {
+export function extractUsage(usage: Anthropic.Usage): TokenUsage {
 	return {
 		inputTokens: usage.input_tokens,
 		outputTokens: usage.output_tokens
@@ -159,7 +159,7 @@ function stringifyUserPrompt(prompt: LlmGenerationConfig["userPrompt"]): string 
  * `UNKNOWN` — the retry loop treats those as non-retryable, which is the
  * safe default.
  */
-function mapAnthropicError(error: unknown): LlmError {
+export function mapAnthropicError(error: unknown): LlmError {
 	if (error instanceof LlmError) return error
 
 	if (error instanceof Anthropic.RateLimitError) {

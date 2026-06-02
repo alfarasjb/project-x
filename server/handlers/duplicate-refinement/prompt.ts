@@ -15,6 +15,8 @@
  * this 1-shot call.
  */
 
+import { ContextBuilder } from "@server/handlers/context-builder"
+
 const MAX_FILE_CHARS = 6000
 
 export const REFINE_DUPLICATE_SYSTEM_PROMPT =
@@ -55,26 +57,18 @@ export interface RefineDuplicateClusterInput {
 }
 
 export function buildRefineDuplicateUserPrompt(input: RefineDuplicateClusterInput): string {
-	const rendered = input.files.map((file, i) => renderFile(i + 1, file)).join("\n\n")
-	return `These ${input.files.length} files were flagged as possible duplicates of each other. Judge them.\n\n${rendered}`
-}
-
-function renderFile(index: number, file: RefineDuplicateFile): string {
-	const meta = [
-		`File ${index}: ${file.path}`,
-		file.classification ? `Classification: ${file.classification}` : null,
-		file.description ? `Description: ${file.description}` : null
-	]
-		.filter((line) => line !== null)
-		.join("\n")
-	const { text, truncated } = truncate(file.contents)
-	const truncatedNote = truncated
-		? `\n\n[truncated to ${MAX_FILE_CHARS} chars from ${file.contents.length}]`
-		: ""
-	return `${meta}\n\n--- contents ---\n${text}${truncatedNote}`
-}
-
-function truncate(text: string): { text: string; truncated: boolean } {
-	if (text.length <= MAX_FILE_CHARS) return { text, truncated: false }
-	return { text: text.slice(0, MAX_FILE_CHARS), truncated: true }
+	// Each member becomes a `<file path=… classification=… description=…>` block;
+	// the per-block char cap is the same MAX_FILE_CHARS budget this prompt has
+	// always enforced. The model references members by path (the `excluded`
+	// schema field is path-keyed), so dropping the old "File N:" numbering is safe.
+	const builder = new ContextBuilder({ maxBlockChars: MAX_FILE_CHARS })
+	for (const file of input.files) {
+		builder.addFile({
+			path: file.path,
+			contents: file.contents,
+			...(file.classification ? { classification: file.classification } : {}),
+			...(file.description ? { description: file.description } : {})
+		})
+	}
+	return `These ${input.files.length} files were flagged as possible duplicates of each other. Judge them.\n\n${builder.build().text}`
 }

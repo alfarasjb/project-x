@@ -47,18 +47,32 @@ export const RefinementVerdictSchema = z.enum(["duplicate", "partial", "false-po
 export type RefinementVerdict = z.infer<typeof RefinementVerdictSchema>
 
 /**
- * Second-pass LLM refinement attached to an issue (today: duplicate-candidates).
- * Written in place on the issue row by the handler; absent until refined.
- *
- * `excluded` carries the split: cluster members the model judged proximity-only
- * (not actually duplicating the rest). The verdict + consolidation describe the
- * genuine group — the affected members NOT in `excluded`.
- *
- * `sourceHashes` maps each judged member path to its `metrics.contentHash` at
- * refine time, so the handler can skip a cluster whose files are all unchanged
- * since its last refinement (the same skip-unchanged contract analyze uses).
+ * Verdict from the `refine-god-file` agent-loop handler — Claude traverses the
+ * file's graph neighbourhood (its dependencies, dependents, and peers) to judge
+ * whether the line-count flag is a real scope problem.
+ *   "should-split"   — genuinely tangled responsibilities; `splitPlan` describes the seams.
+ *   "partial"        — mostly cohesive, but one chunk wants extracting; `splitPlan` names it.
+ *   "false-positive" — large but legitimately cohesive (a schema, a registry, generated code). No action.
  */
-export const IssueRefinementSchema = z.object({
+export const GodFileVerdictSchema = z.enum(["should-split", "partial", "false-positive"])
+export type GodFileVerdict = z.infer<typeof GodFileVerdictSchema>
+
+/**
+ * Second-pass LLM refinement attached to an issue — a discriminated union keyed
+ * on `kind`, one variant per handler. Written in place on the issue row by the
+ * handler; absent until refined. `sourceHashes` (on every variant) maps each
+ * judged node path to its `metrics.contentHash` at refine time, so the handler
+ * can skip an issue whose source files are all unchanged since its last
+ * refinement (the same skip-unchanged contract analyze uses).
+ */
+
+/**
+ * Duplicate-cluster verdict. `excluded` carries the split: cluster members the
+ * model judged proximity-only (not actually duplicating the rest). The verdict +
+ * consolidation describe the genuine group — the affected members NOT in `excluded`.
+ */
+export const DuplicateRefinementSchema = z.object({
+	kind: z.literal("duplicate"),
 	verdict: RefinementVerdictSchema,
 	reasoning: z.string().min(1),
 	/** Plain-text consolidation advice. Present for duplicate/partial, absent for false-positive. */
@@ -67,6 +81,36 @@ export const IssueRefinementSchema = z.object({
 	excluded: z.array(z.string().min(1)).optional(),
 	sourceHashes: z.record(z.string(), z.string())
 })
+export type DuplicateRefinement = z.infer<typeof DuplicateRefinementSchema>
+
+/** God-file verdict. `splitPlan` is present for should-split/partial, absent for false-positive. */
+export const GodFileRefinementSchema = z.object({
+	kind: z.literal("god-file"),
+	verdict: GodFileVerdictSchema,
+	reasoning: z.string().min(1),
+	/** Plain-text advice on the seams to split along. Absent for false-positive. */
+	splitPlan: z.string().min(1).optional(),
+	sourceHashes: z.record(z.string(), z.string())
+})
+export type GodFileRefinement = z.infer<typeof GodFileRefinementSchema>
+
+const RefinementUnionSchema = z.discriminatedUnion("kind", [
+	DuplicateRefinementSchema,
+	GodFileRefinementSchema
+])
+
+/**
+ * Refinements written before ARG-9 carried no `kind` — they were all
+ * duplicate-cluster verdicts. Normalize those legacy rows to the "duplicate"
+ * variant on parse so `IssuesSchema.parse` keeps accepting stored data without
+ * a migration (the column is JSONB; nothing rewrites old rows in place).
+ */
+export const IssueRefinementSchema = z.preprocess((value) => {
+	if (value !== null && typeof value === "object" && !("kind" in value)) {
+		return { ...value, kind: "duplicate" }
+	}
+	return value
+}, RefinementUnionSchema)
 export type IssueRefinement = z.infer<typeof IssueRefinementSchema>
 
 export const IssueSchema = z.object({

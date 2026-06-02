@@ -2,8 +2,13 @@ import { readFile } from "node:fs/promises"
 import { posix } from "node:path"
 import { z } from "zod"
 import type { Graph, GraphNode } from "@shared/schemas/graph"
-import { RefinementVerdictSchema, type Issue, type IssueRefinement } from "@shared/schemas/issue"
+import {
+	RefinementVerdictSchema,
+	type DuplicateRefinement,
+	type Issue
+} from "@shared/schemas/issue"
 import { getAdapter } from "@server/llm/fallback/factory"
+import { hashesUnchanged } from "@server/handlers/source-hashes"
 import {
 	REFINE_DUPLICATE_SYSTEM_PROMPT,
 	buildRefineDuplicateUserPrompt,
@@ -151,19 +156,12 @@ function hashesByPath(members: readonly GraphNode[]): Record<string, string> {
 	return hashes
 }
 
-function hashesUnchanged(prev: Record<string, string>, current: Record<string, string>): boolean {
-	const prevKeys = Object.keys(prev)
-	const currentKeys = Object.keys(current)
-	// A member without a contentHash means we can't prove it's unchanged — refine.
-	if (prevKeys.length === 0 || prevKeys.length !== currentKeys.length) return false
-	return currentKeys.every((key) => prev[key] === current[key])
-}
-
 function toRefinement(
 	output: RefineDuplicateOutput,
 	sourceHashes: Record<string, string>
-): IssueRefinement {
+): DuplicateRefinement {
 	return {
+		kind: "duplicate",
 		verdict: output.verdict,
 		reasoning: output.reasoning,
 		...(output.consolidation ? { consolidation: output.consolidation } : {}),

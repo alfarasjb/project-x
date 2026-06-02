@@ -1,6 +1,12 @@
 import type { Eye } from "lucide-react"
 import { EyeOff, Inbox, MessageCircle, Network, X } from "lucide-react"
-import type { Issue, IssueSeverity, RefinementVerdict } from "@shared/schemas/issue"
+import type {
+	GodFileVerdict,
+	Issue,
+	IssueRefinement,
+	IssueSeverity,
+	RefinementVerdict
+} from "@shared/schemas/issue"
 import { cn } from "@/lib/utils"
 
 /**
@@ -65,16 +71,16 @@ export function IssueDetailPanel({ issue, onClose }: { issue: Issue | null; onCl
 						<span
 							className={cn(
 								"inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-								VERDICT_STYLE[issue.refinement.verdict]
+								verdictStyle(issue.refinement)
 							)}
 						>
-							{VERDICT_LABEL[issue.refinement.verdict]}
+							{verdictLabel(issue.refinement)}
 						</span>
 					</div>
 					<p className="text-sm leading-relaxed whitespace-pre-line">
 						{issue.refinement.reasoning}
 					</p>
-					{issue.refinement.consolidation && (
+					{issue.refinement.kind === "duplicate" && issue.refinement.consolidation && (
 						<div className="mt-3">
 							<div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase tracking-wide">
 								How to consolidate
@@ -84,18 +90,30 @@ export function IssueDetailPanel({ issue, onClose }: { issue: Issue | null; onCl
 							</p>
 						</div>
 					)}
-					{issue.refinement.excluded && issue.refinement.excluded.length > 0 && (
+					{issue.refinement.kind === "god-file" && issue.refinement.splitPlan && (
 						<div className="mt-3">
 							<div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase tracking-wide">
-								Not actually duplicates
+								How to split
 							</div>
-							<ul className="text-muted-foreground space-y-1 font-mono text-[11px] leading-relaxed">
-								{issue.refinement.excluded.map((path) => (
-									<li key={path}>{path}</li>
-								))}
-							</ul>
+							<p className="text-sm leading-relaxed whitespace-pre-line">
+								{issue.refinement.splitPlan}
+							</p>
 						</div>
 					)}
+					{issue.refinement.kind === "duplicate" &&
+						issue.refinement.excluded &&
+						issue.refinement.excluded.length > 0 && (
+							<div className="mt-3">
+								<div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase tracking-wide">
+									Not actually duplicates
+								</div>
+								<ul className="text-muted-foreground space-y-1 font-mono text-[11px] leading-relaxed">
+									{issue.refinement.excluded.map((path) => (
+										<li key={path}>{path}</li>
+									))}
+								</ul>
+							</div>
+						)}
 				</Section>
 			)}
 
@@ -196,16 +214,35 @@ const SEVERITY_LABEL_COLOR: Record<IssueSeverity, string> = {
 	info: "text-blue-600 dark:text-blue-400"
 }
 
-const VERDICT_LABEL: Record<RefinementVerdict, string> = {
+// Verdict presentation is keyed by kind THEN verdict: "partial"/"false-positive"
+// exist in both vocabularies but read differently (a duplicate vs a god file).
+const DUPLICATE_VERDICT_LABEL: Record<RefinementVerdict, string> = {
 	duplicate: "Duplicate",
 	partial: "Partial overlap",
 	"false-positive": "Not a duplicate"
 }
 
-const VERDICT_STYLE: Record<RefinementVerdict, string> = {
+const GOD_FILE_VERDICT_LABEL: Record<GodFileVerdict, string> = {
+	"should-split": "Should split",
+	partial: "Extract a chunk",
+	"false-positive": "Not a god file"
+}
+
+const VERDICT_STYLE_BY_VERDICT: Record<RefinementVerdict | GodFileVerdict, string> = {
 	duplicate: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+	"should-split": "bg-amber-500/15 text-amber-600 dark:text-amber-400",
 	partial: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
 	"false-positive": "bg-muted text-muted-foreground"
+}
+
+function verdictLabel(refinement: IssueRefinement): string {
+	return refinement.kind === "duplicate"
+		? DUPLICATE_VERDICT_LABEL[refinement.verdict]
+		: GOD_FILE_VERDICT_LABEL[refinement.verdict]
+}
+
+function verdictStyle(refinement: IssueRefinement): string {
+	return VERDICT_STYLE_BY_VERDICT[refinement.verdict]
 }
 
 /**

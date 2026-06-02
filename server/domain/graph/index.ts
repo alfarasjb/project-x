@@ -15,6 +15,7 @@ import { parseProject } from "@server/parser"
 import { analyzeGraph } from "@server/audit/analyze"
 import { runAudit, runSimilarityAudit, mergeIssueHistory } from "@server/audit/run"
 import { refineDuplicateClusters } from "@server/handlers/duplicate-refinement/handler"
+import { refineGodFiles } from "@server/handlers/god-file/handler"
 import { embedNodes } from "@server/domain/embeddings"
 import { AppError } from "@server/utils/errors"
 
@@ -225,7 +226,23 @@ export async function analyzeProjectFromPath(
 					return issues
 				}
 			)
-			await saveProjectIssues(project.id, refinedIssues)
+			// Second handler: the god-file agent loop. Same non-fatal contract — a
+			// failure leaves the duplicate-refined issues untouched. Runs after the
+			// duplicate pass so both verdicts land in one save.
+			const fullyRefined = await refineGodFiles({
+				issues: refinedIssues,
+				graph: result.graph,
+				sourcePath,
+				projectId: project.id,
+				projectName: project.name
+			}).catch((error: unknown) => {
+				const message = error instanceof Error ? error.message : String(error)
+				console.warn(
+					`[analyze] ${project.slug}: god-file refinement failed (continuing): ${message}`
+				)
+				return refinedIssues
+			})
+			await saveProjectIssues(project.id, fullyRefined)
 			console.warn(
 				`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}, embedded ${embedResult.embedded} (embed skipped ${embedResult.skipped}, failed ${embedResult.failed}), duplicate-candidates ${similarityIssues.length}${options?.force ? " (forced)" : ""}`
 			)
