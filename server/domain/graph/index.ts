@@ -16,6 +16,8 @@ import { analyzeGraph } from "@server/audit/analyze"
 import { runAudit, runSimilarityAudit, mergeIssueHistory } from "@server/audit/run"
 import { refineDuplicateClusters } from "@server/handlers/duplicate-refinement/handler"
 import { refineGodFiles } from "@server/handlers/god-file/handler"
+import { refineCircularDependencies } from "@server/handlers/circular-dependency/handler"
+import { refineBoundaryViolations } from "@server/handlers/boundary-violation/handler"
 import { embedNodes } from "@server/domain/embeddings"
 import { AppError } from "@server/utils/errors"
 
@@ -242,7 +244,35 @@ export async function analyzeProjectFromPath(
 				)
 				return refinedIssues
 			})
-			await saveProjectIssues(project.id, fullyRefined)
+			// Third handler: the circular-dependency 1-shot judge. Same non-fatal
+			// contract — a failure leaves the prior verdicts untouched.
+			const circularRefined = await refineCircularDependencies(
+				fullyRefined,
+				result.graph,
+				sourcePath
+			).catch((error: unknown) => {
+				const message = error instanceof Error ? error.message : String(error)
+				console.warn(
+					`[analyze] ${project.slug}: circular-dependency refinement failed (continuing): ${message}`
+				)
+				return fullyRefined
+			})
+			// Fourth handler: the boundary-violation agent loop. Runs last so all
+			// four verdicts land in one save; same non-fatal contract.
+			const boundaryRefined = await refineBoundaryViolations({
+				issues: circularRefined,
+				graph: result.graph,
+				sourcePath,
+				projectId: project.id,
+				projectName: project.name
+			}).catch((error: unknown) => {
+				const message = error instanceof Error ? error.message : String(error)
+				console.warn(
+					`[analyze] ${project.slug}: boundary-violation refinement failed (continuing): ${message}`
+				)
+				return circularRefined
+			})
+			await saveProjectIssues(project.id, boundaryRefined)
 			console.warn(
 				`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}, embedded ${embedResult.embedded} (embed skipped ${embedResult.skipped}, failed ${embedResult.failed}), duplicate-candidates ${similarityIssues.length}${options?.force ? " (forced)" : ""}`
 			)

@@ -21,9 +21,12 @@ export type AnthropicModel = (typeof AI_MODELS)[keyof typeof AI_MODELS]
 export type Provider = "anthropic"
 
 /** 1-shot operations — served by `getAdapter` (LlmAdapter / FallbackLlmAdapter). */
-export type LlmOperation = "analyze-node" | "refine-duplicate-cluster"
+export type LlmOperation =
+	| "analyze-node"
+	| "refine-duplicate-cluster"
+	| "refine-circular-dependency"
 /** Multi-step agent-loop operations — served by `getAgentAdapter` (AgentAdapter). */
-export type AgentOperation = "refine-god-file"
+export type AgentOperation = "refine-god-file" | "refine-boundary-violation"
 /**
  * Every LLM operation. `FALLBACK_CHAINS` / `TASK_CONFIGS` are keyed by this
  * union so both adapter kinds share the registry, but the factory getters narrow
@@ -50,7 +53,15 @@ export const FALLBACK_CHAINS: Record<Operation, readonly ChainEntry[]> = {
 	// Sonnet: a multi-step agent loop that traverses the graph to justify or
 	// refute a god-file flag. Same reasoning-over-cost call as duplicate refine,
 	// and it runs on at most a handful of god files per analyze.
-	"refine-god-file": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }]
+	"refine-god-file": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }],
+	// Sonnet: judging whether an import cycle is genuinely harmful, tolerable
+	// (type/test-only), or a parser artifact is a reasoning task — Haiku rubber-stamps.
+	// Runs on a handful of cycles per analyze, so the cost delta is small.
+	"refine-circular-dependency": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }],
+	// Sonnet: an agent loop that traverses the source file's neighbourhood to judge
+	// whether a cross-layer import is a real breach or a justified exception. Same
+	// reasoning-over-cost call as the god-file loop; a handful of findings per analyze.
+	"refine-boundary-violation": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }]
 }
 
 export interface TaskConfig {
@@ -70,7 +81,13 @@ export const TASK_CONFIGS: Record<Operation, TaskConfig> = {
 	// Per-turn budget for the agent loop: each turn is either a tool call or the
 	// final verdict (verdict + reasoning + a split-plan paragraph). The loop's
 	// step cap lives with the handler, not here — this config is per-call.
-	"refine-god-file": { temperature: 0.3, maxOutputTokens: 1500 }
+	"refine-god-file": { temperature: 0.3, maxOutputTokens: 1500 },
+	// 1-shot, same shape as duplicate refine: verdict + reasoning + an optional
+	// resolution paragraph.
+	"refine-circular-dependency": { temperature: 0.3, maxOutputTokens: 1200 },
+	// Per-turn budget for the boundary agent loop — verdict + reasoning + an
+	// optional remediation paragraph. Step cap lives with the handler.
+	"refine-boundary-violation": { temperature: 0.3, maxOutputTokens: 1500 }
 }
 
 /**
