@@ -39,7 +39,7 @@ export function RouteErrorPage({ error }: { error: unknown }) {
 					<summary className="hover:text-foreground cursor-pointer transition-colors">
 						Technical detail
 					</summary>
-					<pre className="bg-muted mt-2 overflow-auto rounded p-2 font-mono whitespace-pre-wrap">
+					<pre className="bg-muted mt-2 overflow-auto rounded-none p-2 font-mono whitespace-pre-wrap">
 						{errorMessage(error, "Unknown error")}
 					</pre>
 				</details>
