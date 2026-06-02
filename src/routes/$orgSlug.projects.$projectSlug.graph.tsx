@@ -14,5 +14,9 @@ export const Route = createFileRoute("/$orgSlug/projects/$projectSlug/graph")({
 function GraphRoute() {
 	const { projectId } = parentRoute.useLoaderData()
 
-	return <GraphGuard projectId={projectId}>{(graph) => <GraphCanvas graph={graph} />}</GraphGuard>
+	return (
+		<GraphGuard projectId={projectId}>
+			{(graph) => <GraphCanvas graph={graph} projectId={projectId} />}
+		</GraphGuard>
+	)
 }

@@ -126,7 +126,7 @@ function applyLayout(
  * Switching views re-layouts by design — the canvas does not preserve positions
  * across views; each view is its own space-conserving picture.
  */
-export function GraphCanvas({ graph }: { graph: Graph }) {
+export function GraphCanvas({ graph, projectId }: { graph: Graph; projectId: string }) {
 	const [filterLevel, setFilterLevel] = useState<FilterLevel>("modules")
 	const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set())
 	const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -287,6 +287,7 @@ export function GraphCanvas({ graph }: { graph: Graph }) {
 				edges={edges}
 				selectedId={selectedId}
 				open={inspectorOpen}
+				projectId={projectId}
 				onToggle={toggleInspector}
 				onSelect={setSelectedId}
 			/>

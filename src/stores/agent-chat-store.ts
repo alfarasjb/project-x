@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { ApiError } from "@/lib/api"
 import type {
 	ChatEvent,
 	ChatMessage,
@@ -23,6 +24,12 @@ interface AgentChatState {
 	applyEvent: (event: ChatEvent) => void
 	/** Push a user turn onto the stream. */
 	appendUserMessage: (text: string) => void
+	/**
+	 * End a turn that errored: append `text` to the in-flight assistant bubble
+	 * (finalizing it), or start a fresh assistant message when the failure hit
+	 * before any bubble was created.
+	 */
+	failTurn: (text: string) => void
 	reset: () => void
 	/**
 	 * Drive a whole turn: push the user message, enter `thinking`, then consume
@@ -109,6 +116,26 @@ export const useAgentChatStore = create<AgentChatState>((set, get) => ({
 			]
 		})),
 
+	failTurn: (text) =>
+		set((state) => {
+			const inFlight = [...state.messages].reverse().find((message) => message.streaming)
+			if (inFlight) {
+				return {
+					messages: patchMessage(state.messages, inFlight.id, (message) => ({
+						...message,
+						text: message.text ? `${message.text}\n\n${text}` : text,
+						streaming: false
+					}))
+				}
+			}
+			return {
+				messages: [
+					...state.messages,
+					{ id: crypto.randomUUID(), role: "assistant", text, toolCalls: [], streaming: false }
+				]
+			}
+		}),
+
 	reset: () => set({ messages: [], status: "idle" }),
 
 	runTurn: async (transport, userText) => {
@@ -123,10 +150,22 @@ export const useAgentChatStore = create<AgentChatState>((set, get) => ({
 				if (get().status === "thinking") set({ status: "streaming" })
 				get().applyEvent(event)
 			}
+		} catch (error) {
+			// The transport threw — a pre-stream failure (an ApiError with a
+			// user-facing message: missing key / no graph / auth) or a mid-stream
+			// one (a bad SSE frame). Surface it in the chat and finalize any bubble
+			// left streaming, so the user gets feedback instead of a silent failure
+			// or a caret that blinks forever.
+			get().failTurn(toErrorText(error))
 		} finally {
-			// Always re-enable the composer — covers normal completion and a
-			// transport that throws mid-stream (a buggy mock, or the future loop).
+			// Always re-enable the composer — covers normal completion and errors.
 			set({ status: "idle" })
 		}
 	}
 }))
+
+/** A user-facing line for a failed turn: the server's message for an ApiError, else a generic one. */
+function toErrorText(error: unknown): string {
+	if (error instanceof ApiError) return error.message
+	return "Something went wrong talking to the agent. Please try again."
+}

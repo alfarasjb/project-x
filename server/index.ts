@@ -13,6 +13,7 @@ import { projectRoutes } from "@server/routes/projects"
 import { graphRoutes } from "@server/routes/graph"
 import { issueRoutes } from "@server/routes/issues"
 import { integrationRoutes } from "@server/routes/integrations"
+import { agentRoutes } from "@server/routes/agent"
 import { AppError } from "@server/utils/errors"
 
 const PORT = env.PORT
@@ -65,6 +66,7 @@ await app.register(projectRoutes)
 await app.register(graphRoutes)
 await app.register(issueRoutes)
 await app.register(integrationRoutes)
+await app.register(agentRoutes)
 
 /**
  * Single-service production mode: when a Vite build is present at `dist/web/`,

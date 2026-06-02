@@ -22,8 +22,13 @@ export type Provider = "anthropic"
 
 /** 1-shot operations — served by `getAdapter` (LlmAdapter / FallbackLlmAdapter). */
 export type LlmOperation = "analyze-node" | "refine-duplicate-cluster"
-/** Multi-step agent-loop operations — served by `getAgentAdapter` (AgentAdapter). */
-export type AgentOperation = "refine-god-file"
+/**
+ * Multi-step agent-loop operations. `refine-god-file` is served by the batch
+ * `getAgentAdapter` (AgentAdapter); `qa-agent` is served by the streaming
+ * `getStreamingAgentRuntime` (hand-wired loop in `server/agent/`). Both draw
+ * their model + config from the shared registry below.
+ */
+export type AgentOperation = "refine-god-file" | "qa-agent"
 /**
  * Every LLM operation. `FALLBACK_CHAINS` / `TASK_CONFIGS` are keyed by this
  * union so both adapter kinds share the registry, but the factory getters narrow
@@ -50,7 +55,11 @@ export const FALLBACK_CHAINS: Record<Operation, readonly ChainEntry[]> = {
 	// Sonnet: a multi-step agent loop that traverses the graph to justify or
 	// refute a god-file flag. Same reasoning-over-cost call as duplicate refine,
 	// and it runs on at most a handful of god files per analyze.
-	"refine-god-file": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }]
+	"refine-god-file": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }],
+	// Sonnet: an interactive agent that traverses the graph to answer a user's
+	// architecture questions. Reasoning over multi-step traversal is the job, and
+	// it's user-initiated (one chat turn at a time), so the Sonnet cost is fine.
+	"qa-agent": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }]
 }
 
 export interface TaskConfig {
@@ -70,7 +79,11 @@ export const TASK_CONFIGS: Record<Operation, TaskConfig> = {
 	// Per-turn budget for the agent loop: each turn is either a tool call or the
 	// final verdict (verdict + reasoning + a split-plan paragraph). The loop's
 	// step cap lives with the handler, not here — this config is per-call.
-	"refine-god-file": { temperature: 0.3, maxOutputTokens: 1500 }
+	"refine-god-file": { temperature: 0.3, maxOutputTokens: 1500 },
+	// Per-turn budget for the QA chat loop: a turn is either a tool request or a
+	// prose answer, so a bigger token cap than the structured verdict above. The
+	// loop's step cap lives with `server/agent/`, not here.
+	"qa-agent": { temperature: 0.3, maxOutputTokens: 2048 }
 }
 
 /**

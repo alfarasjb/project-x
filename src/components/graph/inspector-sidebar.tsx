@@ -22,6 +22,7 @@ export function InspectorSidebar({
 	edges,
 	selectedId,
 	open,
+	projectId,
 	onToggle,
 	onSelect
 }: {
@@ -29,6 +30,7 @@ export function InspectorSidebar({
 	edges: Edge[]
 	selectedId: string | null
 	open: boolean
+	projectId: string
 	onToggle: () => void
 	onSelect: (id: string) => void
 }) {
@@ -101,7 +103,7 @@ export function InspectorSidebar({
 					forceMount
 					className="min-h-0 flex-1 overflow-hidden data-[state=inactive]:hidden"
 				>
-					<AgentChat />
+					<AgentChat projectId={projectId} />
 				</TabsContent>
 			</Tabs>
 		</aside>
