@@ -150,6 +150,26 @@ export async function crawlProjectFromPath(project: Project, sourcePath: string)
 }
 
 /**
+ * Run one non-fatal issue-refinement stage. Each handler's per-issue try/catch
+ * already stops a single bad issue from failing the stage; this wrapper adds the
+ * top-level guard so a whole-stage failure leaves the prior stage's issues
+ * untouched and analyze keeps going. Every refinement stage funnels through here
+ * so the error handling can't drift between handlers.
+ */
+async function runRefinementStage(
+	slug: string,
+	label: string,
+	prevIssues: Issue[],
+	refine: (issues: Issue[]) => Promise<Issue[]>
+): Promise<Issue[]> {
+	return refine(prevIssues).catch((error: unknown) => {
+		const message = error instanceof Error ? error.message : String(error)
+		console.warn(`[analyze] ${slug}: ${label} refinement failed (continuing): ${message}`)
+		return prevIssues
+	})
+}
+
+/**
  * The "classify + describe + embed + similarity audit" inner loop,
  * parameterized by where the source lives on disk. Called inline by the
  * local-analyze path and by the Trigger.dev analyze-project task after it
@@ -213,66 +233,38 @@ export async function analyzeProjectFromPath(
 					return [] as Issue[]
 				}
 			)
-			const issues = mergeIssueHistory([...heuristicIssues, ...similarityIssues], previousIssues)
-			// Second-pass LLM refinement over duplicate-candidates clusters. Runs
-			// AFTER the merge so carried-forward refinements are visible to the
-			// skip-unchanged check. Reuses the analyze pass's `sourcePath` (the
-			// already-cloned repo on GitHub workers) — no re-clone. A top-level
-			// failure leaves the merged issues untouched; analyze never fails on it.
-			const refinedIssues = await refineDuplicateClusters(issues, result.graph, sourcePath).catch(
-				(error: unknown) => {
-					const message = error instanceof Error ? error.message : String(error)
-					console.warn(
-						`[analyze] ${project.slug}: duplicate refinement failed (continuing): ${message}`
-					)
-					return issues
-				}
+			// Second-pass LLM refinement over the heuristic issues. Each handler runs
+			// AFTER the merge so carried-forward refinements are visible to its
+			// skip-unchanged check, and reuses the analyze pass's already-cloned
+			// `sourcePath` (no re-clone). Stages run in sequence so all verdicts land
+			// in one save; `runRefinementStage` makes each one non-fatal, so a stage
+			// failure leaves the prior stage's issues untouched and analyze continues.
+			let issues = mergeIssueHistory([...heuristicIssues, ...similarityIssues], previousIssues)
+			issues = await runRefinementStage(project.slug, "duplicate", issues, (input) =>
+				refineDuplicateClusters(input, result.graph, sourcePath)
 			)
-			// Second handler: the god-file agent loop. Same non-fatal contract — a
-			// failure leaves the duplicate-refined issues untouched. Runs after the
-			// duplicate pass so both verdicts land in one save.
-			const fullyRefined = await refineGodFiles({
-				issues: refinedIssues,
-				graph: result.graph,
-				sourcePath,
-				projectId: project.id,
-				projectName: project.name
-			}).catch((error: unknown) => {
-				const message = error instanceof Error ? error.message : String(error)
-				console.warn(
-					`[analyze] ${project.slug}: god-file refinement failed (continuing): ${message}`
-				)
-				return refinedIssues
-			})
-			// Third handler: the circular-dependency 1-shot judge. Same non-fatal
-			// contract — a failure leaves the prior verdicts untouched.
-			const circularRefined = await refineCircularDependencies(
-				fullyRefined,
-				result.graph,
-				sourcePath
-			).catch((error: unknown) => {
-				const message = error instanceof Error ? error.message : String(error)
-				console.warn(
-					`[analyze] ${project.slug}: circular-dependency refinement failed (continuing): ${message}`
-				)
-				return fullyRefined
-			})
-			// Fourth handler: the boundary-violation agent loop. Runs last so all
-			// four verdicts land in one save; same non-fatal contract.
-			const boundaryRefined = await refineBoundaryViolations({
-				issues: circularRefined,
-				graph: result.graph,
-				sourcePath,
-				projectId: project.id,
-				projectName: project.name
-			}).catch((error: unknown) => {
-				const message = error instanceof Error ? error.message : String(error)
-				console.warn(
-					`[analyze] ${project.slug}: boundary-violation refinement failed (continuing): ${message}`
-				)
-				return circularRefined
-			})
-			await saveProjectIssues(project.id, boundaryRefined)
+			issues = await runRefinementStage(project.slug, "god-file", issues, (input) =>
+				refineGodFiles({
+					issues: input,
+					graph: result.graph,
+					sourcePath,
+					projectId: project.id,
+					projectName: project.name
+				})
+			)
+			issues = await runRefinementStage(project.slug, "circular-dependency", issues, (input) =>
+				refineCircularDependencies(input, result.graph, sourcePath)
+			)
+			issues = await runRefinementStage(project.slug, "boundary-violation", issues, (input) =>
+				refineBoundaryViolations({
+					issues: input,
+					graph: result.graph,
+					sourcePath,
+					projectId: project.id,
+					projectName: project.name
+				})
+			)
+			await saveProjectIssues(project.id, issues)
 			console.warn(
 				`[analyze] ${project.slug}: analyzed ${result.analyzed}, skipped ${result.skipped}, failed ${result.failed}, embedded ${embedResult.embedded} (embed skipped ${embedResult.skipped}, failed ${embedResult.failed}), duplicate-candidates ${similarityIssues.length}${options?.force ? " (forced)" : ""}`
 			)

@@ -129,7 +129,7 @@ export function IssueDetailPanel({ issue, onClose }: { issue: Issue | null; onCl
 					{issue.refinement.kind === "boundary-violation" && issue.refinement.remediation && (
 						<div className="mt-3">
 							<div className="text-muted-foreground mb-1 text-[10px] font-semibold uppercase tracking-wide">
-								How to fix
+								How to reroute
 							</div>
 							<p className="text-sm leading-relaxed whitespace-pre-line">
 								{issue.refinement.remediation}
@@ -236,8 +236,9 @@ const SEVERITY_LABEL_COLOR: Record<IssueSeverity, string> = {
 	info: "text-blue-600 dark:text-blue-400"
 }
 
-// Verdict presentation is keyed by kind THEN verdict: "partial"/"false-positive"
-// exist in both vocabularies but read differently (a duplicate vs a god file).
+// Verdict presentation is keyed by kind THEN verdict: a shared verdict like
+// "false-positive" exists across kinds but reads differently per kind (a
+// non-duplicate vs a healthy file vs a benign cycle vs an allowed import).
 const DUPLICATE_VERDICT_LABEL: Record<RefinementVerdict, string> = {
 	duplicate: "Duplicate",
 	partial: "Partial overlap",

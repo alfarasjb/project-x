@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises"
-import { posix } from "node:path"
 import { z } from "zod"
 import type { Graph, GraphNode } from "@shared/schemas/graph"
 import {
@@ -8,7 +7,9 @@ import {
 	type Issue
 } from "@shared/schemas/issue"
 import { getAgentAdapter } from "@server/llm/fallback/factory"
-import { hashesUnchanged } from "@server/handlers/source-hashes"
+import { AGENT_OPERATIONS } from "@server/llm/fallback/chains"
+import { hashesByPath, hashesUnchanged } from "@server/handlers/source-hashes"
+import { absolutePath } from "@server/handlers/paths"
 import { findSimilarToNodeTool } from "@server/tools/find-similar"
 import { getNodeTool } from "@server/tools/get-node"
 import { listNodesTool } from "@server/tools/list-nodes"
@@ -68,7 +69,7 @@ const MAX_AGENT_STEPS = 12
 export async function refineBoundaryViolation(
 	input: RefineBoundaryViolationInput
 ): Promise<BoundaryVerdictOutput> {
-	const adapter = getAgentAdapter("refine-boundary-violation")
+	const adapter = getAgentAdapter(AGENT_OPERATIONS.REFINE_BOUNDARY_VIOLATION)
 	const ctx: ToolContext = { projectId: input.projectId, graph: input.graph }
 	const toolsByName = new Map(BOUNDARY_TOOLS.map((tool) => [tool.name, tool]))
 
@@ -132,10 +133,15 @@ export async function refineBoundaryViolations(args: {
 		}
 		// `affected[0]` is the importing source file; the rest are the targets it
 		// shouldn't import. The agent reads the source's contents, so bail if the
-		// source node went missing from the graph or isn't a file.
+		// source node went missing from the graph or isn't a file. The rule emits
+		// `[sourceFile, ...targets]`, so an unexpected shape is real upstream drift
+		// worth surfacing rather than skipping quietly.
 		const sourceNodePath = issue.affected[0]
 		const source = sourceNodePath ? nodeByPath.get(sourceNodePath) : undefined
 		if (!source || source.kind !== "file" || issue.affected.length < 2) {
+			console.warn(
+				`[refine-boundary] ${issue.id} skipped — source missing/not a file or no targets`
+			)
 			out.push(issue)
 			continue
 		}
@@ -165,10 +171,10 @@ export async function refineBoundaryViolations(args: {
 				contents,
 				targets: issue.affected.slice(1),
 				violationDetail: issue.description,
-				// Direct assignment — the prompt builder tolerates undefined, so the
-				// optional fields don't need a conditional spread here.
-				...(source.classification ? { classification: source.classification } : {}),
-				...(source.description?.what ? { description: source.description.what } : {})
+				// Direct assignment — the prompt builder tolerates undefined (addFile
+				// drops empty attrs), so the optional meta doesn't need a spread.
+				classification: source.classification,
+				description: source.description?.what
 			})
 			out.push({ ...issue, refinement: toRefinement(output, currentHashes) })
 			refined += 1
@@ -184,15 +190,6 @@ export async function refineBoundaryViolations(args: {
 	return out
 }
 
-function hashesByPath(members: readonly GraphNode[]): Record<string, string> {
-	const hashes: Record<string, string> = {}
-	for (const node of members) {
-		const hash = node.metrics?.contentHash
-		if (hash) hashes[node.path] = hash
-	}
-	return hashes
-}
-
 function toRefinement(
 	output: BoundaryVerdictOutput,
 	sourceHashes: Record<string, string>
@@ -204,8 +201,4 @@ function toRefinement(
 		...(output.remediation ? { remediation: output.remediation } : {}),
 		sourceHashes
 	}
-}
-
-function absolutePath(sourcePath: string, nodePath: string): string {
-	return posix.join(sourcePath.replace(/\\/g, "/"), nodePath)
 }

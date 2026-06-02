@@ -81,11 +81,13 @@ export function buildBoundaryUserPrompt(input: RefineBoundaryViolationInput): st
 		kind: "static",
 		content: `The boundary rule flagged this file for importing across an architectural layer. Its findings:\n${input.violationDetail}\n\nThe flagged target files to inspect:\n${targetList}\n\nStart from the source file below, then use the traversal tools to inspect the targets and the layers around them before submitting your verdict.`
 	})
+	// Direct assignment — addFile tolerates undefined (renderAttrs drops empty
+	// attrs), so the optional meta doesn't need a conditional spread.
 	builder.addFile({
 		path: input.path,
 		contents: input.contents,
-		...(input.classification ? { classification: input.classification } : {}),
-		...(input.description ? { description: input.description } : {})
+		classification: input.classification,
+		description: input.description
 	})
 	return builder.build().text
 }

@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises"
-import { posix } from "node:path"
 import { z } from "zod"
 import type { Graph, GraphNode } from "@shared/schemas/graph"
 import {
@@ -8,7 +7,9 @@ import {
 	type Issue
 } from "@shared/schemas/issue"
 import { getAdapter } from "@server/llm/fallback/factory"
-import { hashesUnchanged } from "@server/handlers/source-hashes"
+import { LLM_OPERATIONS } from "@server/llm/fallback/chains"
+import { hashesByPath, hashesUnchanged } from "@server/handlers/source-hashes"
+import { absolutePath } from "@server/handlers/paths"
 import {
 	REFINE_CIRCULAR_SYSTEM_PROMPT,
 	buildRefineCircularUserPrompt,
@@ -54,7 +55,7 @@ const REFINE_CIRCULAR_TOOL = {
 export async function refineCircularDependency(
 	input: RefineCircularDependencyInput
 ): Promise<RefineCircularOutput> {
-	const adapter = getAdapter("refine-circular-dependency")
+	const adapter = getAdapter(LLM_OPERATIONS.REFINE_CIRCULAR_DEPENDENCY)
 	const userPrompt = buildRefineCircularUserPrompt(input)
 	const result = await adapter.generateStructured(
 		{ systemPrompt: REFINE_CIRCULAR_SYSTEM_PROMPT, userPrompt },
@@ -103,7 +104,15 @@ export async function refineCircularDependencies(
 		const members = issue.affected
 			.map((path) => nodeByPath.get(path))
 			.filter((node): node is GraphNode => node !== undefined)
-		if (!qualifies(members, issue.affected.length)) {
+		// A cycle member vanished from the graph or isn't a file — the rule emits
+		// file paths, so this is real upstream drift worth surfacing, not a quiet skip.
+		if (members.length !== issue.affected.length || members.some((node) => node.kind !== "file")) {
+			console.warn(`[refine-circular] ${issue.id} skipped — cycle member missing or not a file`)
+			out.push(issue)
+			continue
+		}
+		// Too long for the prompt budget — an intentional cap, so skip quietly.
+		if (members.length < 2 || members.length > MAX_CYCLE_TO_REFINE) {
 			out.push(issue)
 			continue
 		}
@@ -144,23 +153,6 @@ export async function refineCircularDependencies(
 	return out
 }
 
-function qualifies(members: readonly GraphNode[], affectedCount: number): boolean {
-	// Drop cycles where a member node went missing from the graph, that mix in a
-	// non-file, or that are too long to fit the prompt budget.
-	if (members.length !== affectedCount) return false
-	if (members.length < 2 || members.length > MAX_CYCLE_TO_REFINE) return false
-	return members.every((node) => node.kind === "file")
-}
-
-function hashesByPath(members: readonly GraphNode[]): Record<string, string> {
-	const hashes: Record<string, string> = {}
-	for (const node of members) {
-		const hash = node.metrics?.contentHash
-		if (hash) hashes[node.path] = hash
-	}
-	return hashes
-}
-
 function toRefinement(
 	output: RefineCircularOutput,
 	sourceHashes: Record<string, string>
@@ -172,8 +164,4 @@ function toRefinement(
 		...(output.resolution ? { resolution: output.resolution } : {}),
 		sourceHashes
 	}
-}
-
-function absolutePath(sourcePath: string, nodePath: string): string {
-	return posix.join(sourcePath.replace(/\\/g, "/"), nodePath)
 }

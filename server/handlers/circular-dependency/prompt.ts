@@ -59,11 +59,13 @@ export function buildRefineCircularUserPrompt(input: RefineCircularDependencyInp
 	// depends on which.
 	const builder = new ContextBuilder({ maxBlockChars: MAX_FILE_CHARS })
 	for (const file of input.files) {
+		// Direct assignment — addFile tolerates undefined (renderAttrs drops empty
+		// attrs), so the optional meta doesn't need a conditional spread.
 		builder.addFile({
 			path: file.path,
 			contents: file.contents,
-			...(file.classification ? { classification: file.classification } : {}),
-			...(file.description ? { description: file.description } : {})
+			classification: file.classification,
+			description: file.description
 		})
 	}
 	const arrow = `${input.files.map((file) => file.path).join(" → ")} → ${input.files[0]?.path ?? ""}`
