@@ -4,9 +4,10 @@ import { useQuery } from "@tanstack/react-query"
 import { GraphGuard } from "@/components/project/graph-guard"
 import { IssueDetailPanel } from "@/components/audit/issue-detail-panel"
 import { IssueFeed } from "@/components/audit/issue-feed"
-import { IssueStats } from "@/components/audit/issue-stats"
+import { OverviewBand } from "@/components/audit/overview-band"
 import { issuesQueryOptions } from "@/lib/queries"
 import { routes } from "@/lib/routes"
+import { cn } from "@/lib/utils"
 
 // Parent route (`$orgSlug.projects.$projectSlug.tsx`) does the slug → id
 // resolution + caches the issues list. Read the resolved id from there.
@@ -17,14 +18,14 @@ export const Route = createFileRoute("/$orgSlug/projects/$projectSlug/")({
 })
 
 /**
- * The project's main view — issue stats up top, the dense Issue Feed in
- * the centre, and a right-side detail panel that's always rendered (shows
- * an empty-state placeholder when no issue is selected).
+ * The project's main view — an overview band (issue health + topology +
+ * Analyze) above a full-width Issue Feed. The detail panel is a right-edge
+ * slide-over: it's always mounted but translated off-screen until an issue is
+ * selected, so opening it overlays the feed instead of permanently reserving a
+ * dead 360px column.
  *
- * Selection lives at the route (not inside `IssueFeed`) so the panel can
- * render as a sibling of the feed and the main column can flex around it.
- * The panel always renders so the layout doesn't shift when an issue is
- * picked or deselected.
+ * Selection lives at the route (not inside `IssueFeed`) so the slide-over can
+ * render as a sibling of the feed.
  */
 function DashboardRoute() {
 	const { projectId } = parentRoute.useLoaderData()
@@ -37,18 +38,28 @@ function DashboardRoute() {
 	return (
 		<GraphGuard projectId={projectId}>
 			{() => (
-				<div className="flex min-h-0 flex-1">
-					<div className="flex min-h-0 min-w-0 flex-1 flex-col">
-						<div className="mx-auto flex w-full min-h-0 min-w-0 max-w-4xl flex-1 flex-col gap-4 px-6 pt-5 pb-5">
-							<IssueStats projectId={projectId} />
-							<IssueFeed
-								projectId={projectId}
-								selectedIssueId={selectedIssueId}
-								onSelect={setSelectedIssueId}
-							/>
-						</div>
+				<div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+					<OverviewBand projectId={projectId} />
+					<div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 py-5">
+						<IssueFeed
+							projectId={projectId}
+							selectedIssueId={selectedIssueId}
+							onSelect={setSelectedIssueId}
+						/>
 					</div>
-					<aside className="border-border w-[360px] shrink-0 overflow-y-auto border-l">
+
+					{/*
+					 * Right-edge slide-over. Always mounted (so the transition runs
+					 * both ways); translated off-screen + inert when no issue is
+					 * selected. Honors reduced-motion by dropping the transition.
+					 */}
+					<aside
+						aria-hidden={selectedIssue === null}
+						className={cn(
+							"border-border bg-card absolute inset-y-0 right-0 z-20 w-[400px] max-w-[90vw] overflow-y-auto border-l shadow-2xl transition-transform duration-200 ease-out motion-reduce:transition-none",
+							selectedIssue ? "translate-x-0" : "pointer-events-none translate-x-full"
+						)}
+					>
 						<IssueDetailPanel issue={selectedIssue} onClose={() => setSelectedIssueId(null)} />
 					</aside>
 				</div>
