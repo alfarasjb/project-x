@@ -1,26 +1,37 @@
 @import "tailwindcss";
 
 /*
- * Project X design tokens.
+ * Project X design tokens — "terminal" theme.
  *
- * Light/dark mode swaps the OKLCH values inside the .dark selector below.
- * Components reference these via `bg-background`, `text-foreground`, etc. —
- * never via Tailwind's `dark:` prefix and never via hex literals in component
- * className strings.
+ * Dark-only dev tool. The base is a near-neutral cool near-black (not tinted
+ * green); green is one accent among a small semantic set, used with restraint
+ * for primary actions / focus / selection. Secondary hues (amber, teal) carry
+ * meaning (warning, info) so the UI isn't monochrome-green. Red is destructive.
+ * Components reference these via `bg-background`, `text-foreground`,
+ * `text-warning`, etc. — never via Tailwind `dark:` and never hex literals.
+ *
+ * Radius is zeroed across the whole scale: every `rounded-*` utility collapses
+ * to a hard 90° corner. `rounded-full` (avatars, status dots) is exempt.
+ *
+ * Discipline: body text is a calm near-white for legibility; saturated accent
+ * colors are reserved for accents, actions, focus, and state — never small body
+ * copy. Surfaces step UP in lightness for elevation, not via shadow.
  */
 
 @theme inline {
-	--font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-	--font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+	/* Terminal aesthetic: the whole UI is monospace, top to bottom. */
+	--font-sans: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+	--font-display: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+	--font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-	--radius: 0.625rem;
-	--radius-sm: calc(var(--radius) - 4px);
-	--radius-md: calc(var(--radius) - 2px);
-	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) + 4px);
-	--radius-2xl: calc(var(--radius) + 8px);
-	--radius-3xl: calc(var(--radius) + 16px);
-	--radius-4xl: calc(var(--radius) + 24px);
+	--radius: 0rem;
+	--radius-sm: 0rem;
+	--radius-md: 0rem;
+	--radius-lg: 0rem;
+	--radius-xl: 0rem;
+	--radius-2xl: 0rem;
+	--radius-3xl: 0rem;
+	--radius-4xl: 0rem;
 
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
@@ -38,69 +49,56 @@
 	--color-accent-foreground: var(--accent-foreground);
 	--color-destructive: var(--destructive);
 	--color-destructive-foreground: var(--destructive-foreground);
+	--color-warning: var(--warning);
+	--color-warning-foreground: var(--warning-foreground);
+	--color-info: var(--info);
+	--color-info-foreground: var(--info-foreground);
 	--color-border: var(--border);
 	--color-input: var(--input);
 	--color-ring: var(--ring);
 }
 
-:root {
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.145 0 0);
-
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.145 0 0);
-
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.145 0 0);
-
-	--primary: oklch(0.205 0 0);
-	--primary-foreground: oklch(0.985 0 0);
-
-	--secondary: oklch(0.97 0 0);
-	--secondary-foreground: oklch(0.205 0 0);
-
-	--muted: oklch(0.97 0 0);
-	--muted-foreground: oklch(0.556 0 0);
-
-	--accent: oklch(0.97 0 0);
-	--accent-foreground: oklch(0.205 0 0);
-
-	--destructive: oklch(0.577 0.245 27.325);
-	--destructive-foreground: oklch(0.985 0 0);
-
-	--border: oklch(0.922 0 0);
-	--input: oklch(0.922 0 0);
-	--ring: oklch(0.708 0 0);
-}
-
+/*
+ * Terminal palette. :root and .dark are intentionally identical — dark-only.
+ * Neutrals are a whisper-cool near-black (hue 250, chroma ≤0.008) so the base
+ * reads as a neutral terminal, not a green wash. Surface ladder:
+ * background 0.155 → card 0.185 → popover 0.205 → secondary/muted 0.235.
+ */
+:root,
 .dark {
-	--background: oklch(0.145 0 0);
-	--foreground: oklch(0.985 0 0);
+	--background: oklch(0.155 0.005 250);
+	--foreground: oklch(0.93 0.005 250);
 
-	--card: oklch(0.205 0 0);
-	--card-foreground: oklch(0.985 0 0);
+	--card: oklch(0.185 0.006 250);
+	--card-foreground: oklch(0.93 0.005 250);
 
-	--popover: oklch(0.205 0 0);
-	--popover-foreground: oklch(0.985 0 0);
+	--popover: oklch(0.205 0.007 250);
+	--popover-foreground: oklch(0.93 0.005 250);
 
-	--primary: oklch(0.922 0 0);
-	--primary-foreground: oklch(0.205 0 0);
+	/* Green accent — calmed from neon. Primary actions, focus, selection. */
+	--primary: oklch(0.72 0.13 158);
+	--primary-foreground: oklch(0.16 0.02 158);
 
-	--secondary: oklch(0.269 0 0);
-	--secondary-foreground: oklch(0.985 0 0);
+	--secondary: oklch(0.235 0.007 250);
+	--secondary-foreground: oklch(0.93 0.005 250);
 
-	--muted: oklch(0.269 0 0);
-	--muted-foreground: oklch(0.708 0 0);
+	--muted: oklch(0.235 0.006 250);
+	--muted-foreground: oklch(0.7 0.012 250);
 
-	--accent: oklch(0.269 0 0);
-	--accent-foreground: oklch(0.985 0 0);
+	--accent: oklch(0.27 0.01 250);
+	--accent-foreground: oklch(0.94 0.006 250);
 
-	--destructive: oklch(0.704 0.191 22.216);
-	--destructive-foreground: oklch(0.985 0 0);
+	/* Semantic hues — meaning, not decoration. */
+	--destructive: oklch(0.62 0.2 22); /* critical / destructive */
+	--destructive-foreground: oklch(0.96 0.01 250);
+	--warning: oklch(0.8 0.15 75); /* amber — warning / caution */
+	--warning-foreground: oklch(0.18 0.03 75);
+	--info: oklch(0.76 0.1 195); /* teal — info / neutral highlight (not blue) */
+	--info-foreground: oklch(0.16 0.02 195);
 
-	--border: oklch(1 0 0 / 10%);
-	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.556 0 0);
+	--border: oklch(0.29 0.008 250);
+	--input: oklch(0.32 0.008 250);
+	--ring: oklch(0.72 0.13 158);
 }
 
 @layer base {
@@ -111,20 +109,45 @@
 		font-family: var(--font-sans);
 		background-color: var(--color-background);
 		color: var(--color-foreground);
+
+		/*
+		 * Subtle terminal atmosphere: faint corner vignette + barely-there
+		 * neutral scanlines (~2%). Static (no flicker), fixed to the viewport,
+		 * decorative only. Content sits on opaque surfaces above this.
+		 */
+		background-image:
+			radial-gradient(135% 135% at 50% 50%, transparent 58%, oklch(0.08 0.006 250 / 55%) 100%),
+			repeating-linear-gradient(
+				0deg,
+				oklch(0.8 0.01 250 / 2%) 0px,
+				oklch(0.8 0.01 250 / 2%) 1px,
+				transparent 1px,
+				transparent 3px
+			);
+		background-attachment: fixed;
 	}
 }
 
 /*
- * Graph spotlight — edge colours and the flowing-dash animation used when a
- * node is selected. The dash flows target → source — the direction information
- * moves: an imported module's exports stream into the files that depend on it,
- * opposite the import edge's own direction. Respects prefers-reduced-motion:
- * the dashes fall back to a static stroke.
+ * Earned-intensity glow — the only place the accent leaves the flat plane.
+ * Reserved for high-priority actions (Crawl, Analyze hover) and focus.
+ */
+@utility glow-accent {
+	box-shadow:
+		0 0 0 1px oklch(0.72 0.13 158 / 55%),
+		0 0 16px -5px oklch(0.72 0.13 158 / 70%);
+}
+
+/*
+ * Graph spotlight — edge colours + flowing-dash animation when a node is
+ * selected. The dash flows target → source (information direction). Respects
+ * prefers-reduced-motion. No blue (anti-reference): upstream = brand green,
+ * downstream = amber; they differ in lightness as well as hue.
  */
 :root {
-	--graph-edge-idle: oklch(0.7 0 0);
-	--graph-edge-upstream: oklch(0.69 0.17 237);
-	--graph-edge-downstream: oklch(0.77 0.18 70);
+	--graph-edge-idle: oklch(0.5 0.006 250);
+	--graph-edge-upstream: oklch(0.72 0.14 158);
+	--graph-edge-downstream: oklch(0.8 0.15 75);
 }
 
 @keyframes graph-edge-flow {
@@ -146,9 +169,8 @@
 }
 
 /*
- * QA Agent chat — the caret blinks at the end of an in-flight assistant message
- * and disappears when the turn completes. Respects prefers-reduced-motion: the
- * bar stays solid.
+ * QA Agent chat — caret blinks at the end of an in-flight assistant message,
+ * tinted accent green like a live terminal cursor. Respects reduced-motion.
  */
 @keyframes agent-caret-blink {
 	50% {
@@ -162,7 +184,7 @@
 	height: 1em;
 	margin-left: 1px;
 	vertical-align: text-bottom;
-	background-color: var(--color-foreground);
+	background-color: var(--color-primary);
 	animation: agent-caret-blink 1s step-end infinite;
 }
 

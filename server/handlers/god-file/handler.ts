@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises"
-import { posix } from "node:path"
 import { z } from "zod"
 import type { Graph, GraphNode } from "@shared/schemas/graph"
 import { GodFileVerdictSchema, type GodFileRefinement, type Issue } from "@shared/schemas/issue"
 import { getAgentAdapter } from "@server/llm/fallback/factory"
 import { AGENT_OPERATIONS } from "@server/llm/fallback/chains"
 import { hashesUnchanged } from "@server/handlers/source-hashes"
+import { absolutePath } from "@server/handlers/paths"
 import { findSimilarToNodeTool } from "@server/tools/find-similar"
 import { getNodeTool } from "@server/tools/get-node"
 import { listNodesTool } from "@server/tools/list-nodes"
@@ -25,8 +25,10 @@ import {
  *
  * Mirrors the duplicate-refinement handler's shape on purpose (pure per-issue
  * call + an orchestrator with skip-unchanged and per-issue try/catch) so the
- * two stay legible side by side. No shared `IssueHandler` interface yet — that
- * waits for a third handler (three-rules discipline).
+ * handlers stay legible side by side. There are now four (duplicate, god-file,
+ * circular-dependency, boundary-violation) and no shared `IssueHandler` interface
+ * yet — extracting one is a deliberately deferred follow-up; the shared seams that
+ * already exist live in `source-hashes.ts` and `paths.ts`.
  */
 
 /**
@@ -63,7 +65,7 @@ const MAX_AGENT_STEPS = 12
  * future eval runner both funnel through here so prompt/schema can't drift.
  */
 export async function refineGodFile(input: RefineGodFileInput): Promise<GodFileVerdictOutput> {
-	const adapter = getAgentAdapter(AGENT_OPERATIONS.refineGodFile)
+	const adapter = getAgentAdapter(AGENT_OPERATIONS.REFINE_GOD_FILE)
 	const ctx: ToolContext = { projectId: input.projectId, graph: input.graph }
 	const toolsByName = new Map(GOD_FILE_TOOLS.map((tool) => [tool.name, tool]))
 
@@ -186,8 +188,4 @@ function toRefinement(
 		...(output.splitPlan ? { splitPlan: output.splitPlan } : {}),
 		sourceHashes
 	}
-}
-
-function absolutePath(sourcePath: string, nodePath: string): string {
-	return posix.join(sourcePath.replace(/\\/g, "/"), nodePath)
 }

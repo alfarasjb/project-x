@@ -20,22 +20,27 @@ export type AnthropicModel = (typeof AI_MODELS)[keyof typeof AI_MODELS]
 
 export type Provider = "anthropic"
 
-/** 1-shot operations — served by `getAdapter` (LlmAdapter / FallbackLlmAdapter). */
-export type LlmOperation = "analyze-node" | "refine-duplicate-cluster"
 /**
- * Multi-step agent-loop operations. `refine-god-file` is served by the batch
- * `getAgentAdapter` (AgentAdapter); `qa-agent` is served by the streaming
- * `getStreamingAgentRuntime` (hand-wired loop in `server/agent/`). Both draw
- * their model + config from the shared registry below.
- *
- * Named constants (not a bare union) so call sites reference
- * `AGENT_OPERATIONS.qaAgent` instead of repeating the `"qa-agent"` string.
+ * 1-shot operations — served by `getAdapter` (LlmAdapter / FallbackLlmAdapter).
+ * Declared as a const object (like `AI_MODELS`) so the operation names are a
+ * single source of truth: the `FALLBACK_CHAINS` / `TASK_CONFIGS` keys and every
+ * call site reference these constants instead of duplicating the string literal.
  */
+export const LLM_OPERATIONS = {
+	ANALYZE_NODE: "analyze-node",
+	REFINE_DUPLICATE_CLUSTER: "refine-duplicate-cluster",
+	REFINE_CIRCULAR_DEPENDENCY: "refine-circular-dependency"
+} as const
+export type LlmOperation = (typeof LLM_OPERATIONS)[keyof typeof LLM_OPERATIONS]
+
+/** Multi-step agent-loop operations — served by `getAgentAdapter` (AgentAdapter). */
 export const AGENT_OPERATIONS = {
-	refineGodFile: "refine-god-file",
-	qaAgent: "qa-agent"
+	REFINE_GOD_FILE: "refine-god-file",
+	REFINE_BOUNDARY_VIOLATION: "refine-boundary-violation",
+	QA_AGENT: "qa-agent"
 } as const
 export type AgentOperation = (typeof AGENT_OPERATIONS)[keyof typeof AGENT_OPERATIONS]
+
 /**
  * Every LLM operation. `FALLBACK_CHAINS` / `TASK_CONFIGS` are keyed by this
  * union so both adapter kinds share the registry, but the factory getters narrow
@@ -53,20 +58,33 @@ export const FALLBACK_CHAINS: Record<Operation, readonly ChainEntry[]> = {
 	// Haiku is the right tool: one-paragraph classify + describe doesn't need
 	// Sonnet/Opus and Haiku is ~10x cheaper per token. Reconsider only if a
 	// 50-node sample shows obvious quality regressions.
-	"analyze-node": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_HAIKU }],
+	[LLM_OPERATIONS.ANALYZE_NODE]: [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_HAIKU }],
 	// Sonnet, not Haiku: judging whether N files genuinely duplicate (and
 	// splitting out proximity-only members) is a reasoning task where Haiku
 	// over-confidently merges. This runs on a handful of clusters per analyze,
 	// not every node, so the cost delta is small.
-	"refine-duplicate-cluster": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }],
+	[LLM_OPERATIONS.REFINE_DUPLICATE_CLUSTER]: [
+		{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }
+	],
 	// Sonnet: a multi-step agent loop that traverses the graph to justify or
 	// refute a god-file flag. Same reasoning-over-cost call as duplicate refine,
 	// and it runs on at most a handful of god files per analyze.
-	"refine-god-file": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }],
-	// Sonnet: an interactive agent that traverses the graph to answer a user's
-	// architecture questions. Reasoning over multi-step traversal is the job, and
-	// it's user-initiated (one chat turn at a time), so the Sonnet cost is fine.
-	"qa-agent": [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }]
+	[AGENT_OPERATIONS.REFINE_GOD_FILE]: [
+		{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }
+	],
+	// Sonnet: judging whether an import cycle is genuinely harmful, tolerable
+	// (type/test-only), or a parser artifact is a reasoning task — Haiku rubber-stamps.
+	// Runs on a handful of cycles per analyze, so the cost delta is small.
+	[LLM_OPERATIONS.REFINE_CIRCULAR_DEPENDENCY]: [
+		{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }
+	],
+	// Sonnet: an agent loop that traverses the source file's neighbourhood to judge
+	// whether a cross-layer import is a real breach or a justified exception. Same
+	// reasoning-over-cost call as the god-file loop; a handful of findings per analyze.
+	[AGENT_OPERATIONS.REFINE_BOUNDARY_VIOLATION]: [
+		{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }
+	],
+	[AGENT_OPERATIONS.QA_AGENT]: [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_SONNET }]
 }
 
 export interface TaskConfig {
@@ -78,19 +96,22 @@ export const TASK_CONFIGS: Record<Operation, TaskConfig> = {
 	// Low temp because we want stable classifications across crawls; 800 tokens
 	// is plenty for the `analyze_node` tool_use payload (classification enum +
 	// 1-2 sentence what + optional why).
-	"analyze-node": { temperature: 0.2, maxOutputTokens: 800 },
+	[LLM_OPERATIONS.ANALYZE_NODE]: { temperature: 0.2, maxOutputTokens: 800 },
 	// Slightly higher temp than analyze (still low) and a bigger budget: the
 	// payload is verdict + 2-4 sentence reasoning + a consolidation paragraph +
 	// an optional excluded list.
-	"refine-duplicate-cluster": { temperature: 0.3, maxOutputTokens: 1200 },
+	[LLM_OPERATIONS.REFINE_DUPLICATE_CLUSTER]: { temperature: 0.3, maxOutputTokens: 1200 },
 	// Per-turn budget for the agent loop: each turn is either a tool call or the
 	// final verdict (verdict + reasoning + a split-plan paragraph). The loop's
 	// step cap lives with the handler, not here — this config is per-call.
-	"refine-god-file": { temperature: 0.3, maxOutputTokens: 1500 },
-	// Per-turn budget for the QA chat loop: a turn is either a tool request or a
-	// prose answer, so a bigger token cap than the structured verdict above. The
-	// loop's step cap lives with `server/agent/`, not here.
-	"qa-agent": { temperature: 0.3, maxOutputTokens: 2048 }
+	[AGENT_OPERATIONS.REFINE_GOD_FILE]: { temperature: 0.3, maxOutputTokens: 1500 },
+	// 1-shot, same shape as duplicate refine: verdict + reasoning + an optional
+	// resolution paragraph.
+	[LLM_OPERATIONS.REFINE_CIRCULAR_DEPENDENCY]: { temperature: 0.3, maxOutputTokens: 1200 },
+	// Per-turn budget for the boundary agent loop — verdict + reasoning + an
+	// optional remediation paragraph. Step cap lives with the handler.
+	[AGENT_OPERATIONS.REFINE_BOUNDARY_VIOLATION]: { temperature: 0.3, maxOutputTokens: 1500 },
+	[AGENT_OPERATIONS.QA_AGENT]: { temperature: 0.3, maxOutputTokens: 2480 }
 }
 
 /**
@@ -105,7 +126,11 @@ export const EMBEDDING_MODELS = {
 
 export type EmbeddingProvider = "voyage"
 
-export type EmbeddingOperation = "embed-node"
+/** Embedding operations — const object, same single-source-of-truth pattern as `LLM_OPERATIONS`. */
+export const EMBEDDING_OPERATIONS = {
+	EMBED_NODE: "embed-node"
+} as const
+export type EmbeddingOperation = (typeof EMBEDDING_OPERATIONS)[keyof typeof EMBEDDING_OPERATIONS]
 
 export interface EmbeddingChainEntry {
 	provider: EmbeddingProvider
@@ -120,5 +145,7 @@ export interface EmbeddingChainEntry {
  * a refactor; for now we don't pay the cost of building one we won't use.
  */
 export const EMBEDDING_CHAINS: Record<EmbeddingOperation, readonly EmbeddingChainEntry[]> = {
-	"embed-node": [{ provider: "voyage", model: EMBEDDING_MODELS.VOYAGE_CODE_3, dimensions: 1024 }]
+	[EMBEDDING_OPERATIONS.EMBED_NODE]: [
+		{ provider: "voyage", model: EMBEDDING_MODELS.VOYAGE_CODE_3, dimensions: 1024 }
+	]
 }

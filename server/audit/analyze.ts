@@ -11,6 +11,7 @@ import {
 	type NodeClassification
 } from "@shared/schemas/graph"
 import { getAdapter } from "@server/llm/fallback/factory"
+import { LLM_OPERATIONS } from "@server/llm/fallback/chains"
 import type { GenerationResult } from "@server/llm/types/result"
 import {
 	ANALYZE_SYSTEM_PROMPT,
@@ -62,7 +63,7 @@ const ANALYZE_TOOL = {
 export async function analyzeNode(
 	input: AnalyzeFileInput
 ): Promise<GenerationResult<AnalyzeOutput>> {
-	const adapter = getAdapter("analyze-node")
+	const adapter = getAdapter(LLM_OPERATIONS.ANALYZE_NODE)
 	const userPrompt = buildAnalyzeUserPrompt(input)
 	return adapter.generateStructured(
 		{ systemPrompt: ANALYZE_SYSTEM_PROMPT, userPrompt },

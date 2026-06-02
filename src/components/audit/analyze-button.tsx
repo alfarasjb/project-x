@@ -103,7 +103,7 @@ export function AnalyzeButton({ projectId }: { projectId: string }) {
 					type="button"
 					onClick={() => runAnalyze(false)}
 					disabled={isAnalyzing}
-					className="bg-card/80 hover:bg-card flex items-center gap-1.5 rounded-l-md border border-r-0 px-3 py-1.5 text-xs font-medium backdrop-blur transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+					className="border-primary/40 bg-primary/90 text-primary-foreground hover:bg-primary flex items-center gap-1.5 rounded-l-md border border-r-0 px-3 py-1.5 text-xs font-medium backdrop-blur transition-all disabled:cursor-not-allowed disabled:opacity-60"
 				>
 					<Sparkles className={cn("h-3.5 w-3.5", isAnalyzing && "animate-pulse")} />
 					{isAnalyzing ? "Analyzing…" : "Analyze"}
@@ -115,7 +115,7 @@ export function AnalyzeButton({ projectId }: { projectId: string }) {
 					aria-label="More analyze options"
 					aria-haspopup="menu"
 					aria-expanded={menuOpen}
-					className="bg-card/80 hover:bg-card flex items-center rounded-r-md border px-1.5 py-1.5 backdrop-blur transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+					className="border-primary/40 bg-primary/90 text-primary-foreground hover:bg-primary flex items-center rounded-r-md border px-1.5 py-1.5 backdrop-blur transition-all disabled:cursor-not-allowed disabled:opacity-60"
 				>
 					<ChevronDown className="size-3.5" />
 				</button>

@@ -74,7 +74,7 @@ export function CrawlButton({ projectId }: { projectId: string }) {
 			type="button"
 			onClick={onClick}
 			disabled={isCrawling}
-			className="flex items-center gap-1.5 rounded-md border bg-card/80 px-3 py-1.5 text-xs font-medium backdrop-blur transition-colors hover:bg-card disabled:cursor-not-allowed disabled:opacity-60"
+			className="border-primary/40 bg-primary/90 text-primary-foreground hover:bg-primary hover:glow-accent flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium backdrop-blur transition-all disabled:cursor-not-allowed disabled:opacity-60"
 		>
 			<RefreshCw className={cn("h-3.5 w-3.5", isCrawling && "animate-spin")} />
 			{isCrawling ? "Crawling…" : "Crawl"}

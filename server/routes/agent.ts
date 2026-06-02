@@ -107,7 +107,7 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
  */
 function resolveRuntime(): AnthropicAgentRuntime {
 	try {
-		return getStreamingAgentRuntime(AGENT_OPERATIONS.qaAgent)
+		return getStreamingAgentRuntime(AGENT_OPERATIONS.QA_AGENT)
 	} catch (error) {
 		if (error instanceof MissingProviderKeyError) {
 			throw new AppError(

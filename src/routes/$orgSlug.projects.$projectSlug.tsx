@@ -11,6 +11,10 @@ import { CrawlButton } from "@/components/graph/crawl-button"
 import { ProjectSwitcher } from "@/components/layout/project-switcher"
 import { routes } from "@/lib/routes"
 
+// NOTE: topology counts (modules / files / edges) used to live in this header.
+// They moved into the dashboard's OverviewBand so the dashboard owns the
+// at-a-glance overview; the header keeps the cross-route Crawl + last-crawl.
+
 export const Route = createFileRoute("/$orgSlug/projects/$projectSlug")({
 	component: ProjectLayout,
 	loader: async ({ context, params }) => {
@@ -37,13 +41,7 @@ export const Route = createFileRoute("/$orgSlug/projects/$projectSlug")({
 function ProjectLayout() {
 	const { orgSlug } = Route.useParams()
 	const { projectId } = Route.useLoaderData()
-	const { data: graph } = useQuery(graphQueryOptions(projectId))
 	const { data: project } = useQuery(projectQueryOptions(projectId))
-
-	const moduleCount = graph?.nodes.filter((node) => node.kind === "module").length ?? 0
-	const fileCount = graph?.nodes.filter((node) => node.kind === "file").length ?? 0
-	const edgeCount = graph?.edges.length ?? 0
-	const hasGraph = graph !== undefined && graph.nodes.length > 0
 
 	return (
 		<div className="flex h-full flex-col">
@@ -58,19 +56,6 @@ function ProjectLayout() {
 					<span className="hidden sm:inline">Projects</span>
 				</Link>
 				<ProjectSwitcher orgSlug={orgSlug} projectId={projectId} />
-				{hasGraph && (
-					<div className="text-muted-foreground hidden items-center gap-3 text-[11px] md:flex">
-						<span>
-							<span className="text-foreground font-medium">{moduleCount}</span> modules
-						</span>
-						<span>
-							<span className="text-foreground font-medium">{fileCount}</span> files
-						</span>
-						<span>
-							<span className="text-foreground font-medium">{edgeCount}</span> edges
-						</span>
-					</div>
-				)}
 				<div className="ml-auto flex items-center gap-3">
 					<span className="text-muted-foreground hidden text-[11px] sm:inline">
 						{project?.lastParsedAt

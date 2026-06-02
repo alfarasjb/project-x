@@ -2,6 +2,7 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm"
 import { getDb } from "@server/db"
 import { nodeEmbeddings } from "@server/db/schema/embeddings"
 import { getEmbeddingAdapter } from "@server/llm/fallback/factory"
+import { EMBEDDING_OPERATIONS } from "@server/llm/fallback/chains"
 
 /** Default for `findSimilarToText` when caller doesn't restrict — both file + module. */
 const DEFAULT_TEXT_QUERY_KINDS: readonly string[] = ["file", "module"]
@@ -80,7 +81,7 @@ export async function findSimilarToText(params: {
 }): Promise<SimilarNode[]> {
 	const k = params.k ?? 5
 	const kinds = params.kinds ?? DEFAULT_TEXT_QUERY_KINDS
-	const adapter = getEmbeddingAdapter("embed-node")
+	const adapter = getEmbeddingAdapter(EMBEDDING_OPERATIONS.EMBED_NODE)
 	const { embeddings } = await adapter.embed({ text: params.text })
 	const queryVector = embeddings[0]
 	if (!queryVector) return []
