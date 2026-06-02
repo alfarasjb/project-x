@@ -27,7 +27,12 @@ import { dash } from "@better-auth/infra"
  */
 export const auth = betterAuth({
 	baseURL: env.BETTER_AUTH_URL,
-	secret: env.BETTER_AUTH_API_KEY,
+	// Dedicated, deploy-stable signing secret — NOT the dashboard API key. The
+	// session cookie's HMAC is recomputed from this on every request, so a value
+	// that changes across a restart/redeploy invalidates all live sessions
+	// (ARG-7). Keeping it off `BETTER_AUTH_API_KEY` insulates sessions from
+	// dashboard-credential rotation.
+	secret: env.BETTER_AUTH_SECRET,
 	trustedOrigins: [env.APP_URL],
 
 	database: drizzleAdapter(getDb(), { provider: "pg" }),

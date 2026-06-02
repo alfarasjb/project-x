@@ -16,14 +16,23 @@ const envSchema = z.object({
 	PORT: z.coerce.number().int().positive().default(3100),
 	DATABASE_URL: z.string().min(1),
 	/**
-	 * Better-auth API key — issued by the better-auth hosted dashboard, used
-	 * both by the `dash()` infra plugin (its default-looked-up env name is
-	 * `BETTER_AUTH_API_KEY`) AND as the session-signing secret on the
-	 * `betterAuth({ secret })` config. One string, two roles — simpler than
-	 * juggling a separate locally-generated signing secret, and the key is
-	 * already a 32+ char random string so it satisfies the secret minimum.
+	 * Better-auth API key — issued by the better-auth hosted dashboard and read
+	 * by the `dash()` infra plugin (its default-looked-up env name is
+	 * `BETTER_AUTH_API_KEY`). This is a dashboard-managed credential that may be
+	 * rotated/re-issued out of band, so it MUST NOT double as the session-signing
+	 * secret (see `BETTER_AUTH_SECRET`): a rotation would change the secret across
+	 * a restart and invalidate every live session cookie. One credential, one role.
 	 */
 	BETTER_AUTH_API_KEY: z.string().min(32),
+	/**
+	 * Session-signing secret for `betterAuth({ secret })`. MUST stay stable across
+	 * restarts/redeploys: better-auth HMACs the session cookie with it and
+	 * re-verifies on every request, so a value that changes between boots logs out
+	 * every signed-in user (ARG-7). Deliberately separate from `BETTER_AUTH_API_KEY`
+	 * so a dashboard-key rotation can't take sessions down with it. Generate with
+	 * `openssl rand -base64 32`; 32+ chars.
+	 */
+	BETTER_AUTH_SECRET: z.string().min(32),
 	/**
 	 * Public base URL of the Fastify server (where /api/auth/* lives). Used by
 	 * better-auth to validate the `Origin` header on mutating requests and to
