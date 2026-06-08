@@ -28,6 +28,7 @@ export type Provider = "anthropic"
  */
 export const LLM_OPERATIONS = {
 	ANALYZE_NODE: "analyze-node",
+	LABEL_CLUSTER: "label-cluster",
 	REFINE_DUPLICATE_CLUSTER: "refine-duplicate-cluster",
 	REFINE_CIRCULAR_DEPENDENCY: "refine-circular-dependency"
 } as const
@@ -59,6 +60,10 @@ export const FALLBACK_CHAINS: Record<Operation, readonly ChainEntry[]> = {
 	// Sonnet/Opus and Haiku is ~10x cheaper per token. Reconsider only if a
 	// 50-node sample shows obvious quality regressions.
 	[LLM_OPERATIONS.ANALYZE_NODE]: [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_HAIKU }],
+	// Haiku: naming a subsystem from its files' already-written summaries is the
+	// same light "read + label" shape as analyze-node, runs on a handful of
+	// clusters per analyze, and feeds a one-line Sonnet bump here if labels read weak.
+	[LLM_OPERATIONS.LABEL_CLUSTER]: [{ provider: "anthropic", model: AI_MODELS.ANTHROPIC_HAIKU }],
 	// Sonnet, not Haiku: judging whether N files genuinely duplicate (and
 	// splitting out proximity-only members) is a reasoning task where Haiku
 	// over-confidently merges. This runs on a handful of clusters per analyze,
@@ -97,6 +102,9 @@ export const TASK_CONFIGS: Record<Operation, TaskConfig> = {
 	// is plenty for the `analyze_node` tool_use payload (classification enum +
 	// 1-2 sentence what + optional why).
 	[LLM_OPERATIONS.ANALYZE_NODE]: { temperature: 0.2, maxOutputTokens: 800 },
+	// Low temp for stable names across re-analyze; a Title-Case label + one
+	// sentence fits comfortably under 320 tokens.
+	[LLM_OPERATIONS.LABEL_CLUSTER]: { temperature: 0.3, maxOutputTokens: 320 },
 	// Slightly higher temp than analyze (still low) and a bigger budget: the
 	// payload is verdict + 2-4 sentence reasoning + a consolidation paragraph +
 	// an optional excluded list.

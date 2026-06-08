@@ -319,8 +319,11 @@ export async function parseTypeScript(rootPath: string): Promise<Graph> {
 		moduleEdges.push({ id: `dep:mod:${key}`, source: from, target: to, kind: "dependency" })
 	}
 
+	// Clustering is an analyze-pass concern (see `Graph.clusters`); the parser
+	// emits raw topology only, so the registry starts empty.
 	return {
 		nodes: [...moduleNodes, ...fileNodes, ...primitiveNodes],
-		edges: [...moduleEdges, ...fileEdges]
+		edges: [...moduleEdges, ...fileEdges],
+		clusters: []
 	}
 }

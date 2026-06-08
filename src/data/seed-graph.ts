@@ -12,6 +12,8 @@ import type { Graph } from "@shared/schemas/graph"
  *     to `p-token` — the (future) clickable jump-to-declaration.
  */
 export const seedGraph: Graph = {
+	// Sample graph predates clustering; no subsystems to show.
+	clusters: [],
 	nodes: [
 		// ── Modules ────────────────────────────────────────────────
 		{

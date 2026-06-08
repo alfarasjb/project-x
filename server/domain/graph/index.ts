@@ -13,12 +13,14 @@ import { getDb } from "@server/db"
 import { projects } from "@server/db/schema/projects"
 import { parseProject } from "@server/parser"
 import { analyzeGraph } from "@server/audit/analyze"
+import { labelClusters } from "@server/audit/cluster-label"
 import { runAudit, runSimilarityAudit, mergeIssueHistory } from "@server/audit/run"
 import { refineDuplicateClusters } from "@server/handlers/duplicate-refinement/handler"
 import { refineGodFiles } from "@server/handlers/god-file/handler"
 import { refineCircularDependencies } from "@server/handlers/circular-dependency/handler"
 import { refineBoundaryViolations } from "@server/handlers/boundary-violation/handler"
 import { embedNodes } from "@server/domain/embeddings"
+import { partitionGraph } from "@server/domain/graph/cluster"
 import { AppError } from "@server/utils/errors"
 
 /**
@@ -90,10 +92,14 @@ async function saveProjectIssues(projectId: string, issues: Issue[]): Promise<vo
 }
 
 /**
- * Carry agent-set fields (`description`, `classification`) from the previous
- * stored graph onto a freshly-parsed one, matching nodes by `path`. The
- * parser doesn't know about anything the user or an agent wrote — without
- * this merge, every re-crawl would wipe it.
+ * Carry agent-set fields (`description`, `classification`, `clusterId`) and the
+ * cluster registry from the previous stored graph onto a freshly-parsed one,
+ * matching nodes by `path`. The parser doesn't know about anything the analyze
+ * pass or a user wrote — without this merge, every re-crawl would wipe it.
+ *
+ * `clusterId` (per node) and `clusters` (the registry) are analyze-only: a bare
+ * crawl re-parses topology but never re-clusters, so the previous assignment is
+ * carried forward verbatim until the next analyze recomputes it.
  *
  * Identity is `path`, not `id`: ids are regenerated each parse, paths are
  * the stable thing a file/module/symbol has across crawls.
@@ -102,6 +108,7 @@ function mergePreservedFields(fresh: Graph, previous: Graph): Graph {
 	const previousByPath = new Map(previous.nodes.map((node) => [node.path, node]))
 	return {
 		...fresh,
+		clusters: previous.clusters,
 		nodes: fresh.nodes.map((node) => {
 			const prev = previousByPath.get(node.path)
 			if (!prev) return node
@@ -110,7 +117,8 @@ function mergePreservedFields(fresh: Graph, previous: Graph): Graph {
 				...(prev.description !== undefined ? { description: prev.description } : {}),
 				...(prev.classification !== undefined ? { classification: prev.classification } : {}),
 				...(prev.analyzedHash !== undefined ? { analyzedHash: prev.analyzedHash } : {}),
-				...(prev.concerns !== undefined ? { concerns: prev.concerns } : {})
+				...(prev.concerns !== undefined ? { concerns: prev.concerns } : {}),
+				clusterId: prev.clusterId
 			}
 		})
 	}
@@ -170,6 +178,26 @@ async function runRefinementStage(
 }
 
 /**
+ * Distillation stage: partition the freshly-analyzed graph's files into
+ * community-detection clusters, stamp each file node's `clusterId`, and
+ * AI-label the clusters into `graph.clusters`. Mutates `graph` in place.
+ *
+ * Runs AFTER `analyzeGraph` so the labeler reads each file's AI summary. The
+ * topology partition can't fail and labeling degrades to directory-derived
+ * names, but the caller still invokes this non-fatally: a clustering failure
+ * must never sink an otherwise-good analyze.
+ */
+async function clusterGraph(graph: Graph): Promise<void> {
+	const partition = partitionGraph(graph)
+	for (const node of graph.nodes) {
+		const clusterId = partition.byNode.get(node.id)
+		if (clusterId) node.clusterId = clusterId
+	}
+	graph.clusters = await labelClusters(graph, partition)
+	console.warn(`[analyze] clustered into ${graph.clusters.length} subsystem(s)`)
+}
+
+/**
  * The "classify + describe + embed + similarity audit" inner loop,
  * parameterized by where the source lives on disk. Called inline by the
  * local-analyze path and by the Trigger.dev analyze-project task after it
@@ -207,6 +235,13 @@ export async function analyzeProjectFromPath(
 				}
 			})
 			const result = await analyzeGraph(current, sourcePath, options)
+			// Distil subsystems onto the graph before it's persisted. Non-fatal:
+			// a clustering failure leaves the analyzed graph intact, just without
+			// clusters this run (the next analyze retries).
+			await clusterGraph(result.graph).catch((error: unknown) => {
+				const message = error instanceof Error ? error.message : String(error)
+				console.warn(`[analyze] ${project.slug}: clustering failed (continuing): ${message}`)
+			})
 			const previousIssues = await getProjectIssues(project.id)
 			const heuristicIssues = runAudit(result.graph)
 			await saveActualGraph(project.id, result.graph)

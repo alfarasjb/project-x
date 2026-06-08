@@ -225,6 +225,16 @@ export const GraphNodeSchema = z.object({
 	 */
 	concerns: z.array(ConcernSchema).optional(),
 	/**
+	 * Community-detection cluster this node belongs to — the de-facto subsystem
+	 * it falls into (often NOT its directory). A partition: each file node lands
+	 * in exactly one. Written by the analyze pass's clustering stage (Louvain
+	 * over import edges); symbols inherit their file's cluster at render. The
+	 * id's human label + description live in `Graph.clusters`. Preserved across
+	 * crawls by `mergePreservedFields` — clustering is analyze-only, so a bare
+	 * crawl would otherwise drop it.
+	 */
+	clusterId: z.string().min(1).optional(),
+	/**
 	 * Canvas position, relative to parent if nested. Set by the user (intent
 	 * graph) or by a layout pass (parsed graphs). Optional — the parser emits
 	 * topology only; layout assigns positions before render.
@@ -247,13 +257,37 @@ export const GraphEdgeSchema = z.object({
 })
 export type GraphEdge = z.infer<typeof GraphEdgeSchema>
 
+/**
+ * A community-detection cluster — a de-facto subsystem distilled from the
+ * graph's coupling, not its directory layout. Nodes point at one of these via
+ * `GraphNode.clusterId`; this registry carries the AI-written label/description
+ * shown when the cluster is rendered as a box. Produced once per analyze.
+ */
+export const ClusterSchema = z.object({
+	/** Stable id referenced by `GraphNode.clusterId`. */
+	id: z.string().min(1),
+	/** AI-written display name — "auth subsystem", "ingestion pipeline". */
+	label: z.string().min(1),
+	/** AI-written one-liner; optional for trivial / singleton clusters. */
+	description: z.string().min(1).optional(),
+	/** Dominant architectural layer across members — derived, optional. */
+	layer: NodeLayerSchema.optional()
+})
+export type Cluster = z.infer<typeof ClusterSchema>
+
 export const GraphSchema = z.object({
 	nodes: z.array(GraphNodeSchema),
-	edges: z.array(GraphEdgeSchema)
+	edges: z.array(GraphEdgeSchema),
+	/**
+	 * Community-detection clusters (subsystems) over `nodes` — one entry per
+	 * distinct `GraphNode.clusterId`, carrying its AI label. Defaults to `[]` so
+	 * every graph stored before clustering existed still parses unchanged.
+	 */
+	clusters: z.array(ClusterSchema).default([])
 })
 export type Graph = z.infer<typeof GraphSchema>
 
-export const EMPTY_GRAPH: Graph = { nodes: [], edges: [] }
+export const EMPTY_GRAPH: Graph = { nodes: [], edges: [], clusters: [] }
 
 /**
  * Response from `POST /api/projects/:id/analyze`. Carries the updated graph

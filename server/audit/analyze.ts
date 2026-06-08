@@ -13,6 +13,7 @@ import {
 import { getAdapter } from "@server/llm/fallback/factory"
 import { LLM_OPERATIONS } from "@server/llm/fallback/chains"
 import type { GenerationResult } from "@server/llm/types/result"
+import { runWithConcurrency } from "@server/utils/concurrency"
 import {
 	ANALYZE_SYSTEM_PROMPT,
 	buildAnalyzeUserPrompt,
@@ -238,26 +239,4 @@ function applyAnalyzeResult(
 	if (node.metrics?.contentHash) {
 		node.analyzedHash = node.metrics.contentHash
 	}
-}
-
-/**
- * Run `worker` over `items` with a fixed pool of in-flight calls. We avoid a
- * dependency (p-limit etc.) — the worker loop is ~10 lines and lets us keep
- * Project X's tight dep footprint.
- */
-async function runWithConcurrency<T>(
-	items: readonly T[],
-	limit: number,
-	worker: (item: T) => Promise<void>
-): Promise<void> {
-	let cursor = 0
-	const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
-		while (cursor < items.length) {
-			const index = cursor++
-			const item = items[index]
-			if (item === undefined) continue
-			await worker(item)
-		}
-	})
-	await Promise.all(runners)
 }
